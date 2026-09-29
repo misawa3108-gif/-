@@ -20,20 +20,15 @@ export function AttractScreen({
       <span className="sr-only">画面にタッチして受付を始める</span>
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,oklch(0.9_0.07_55)_0%,transparent_58%),radial-gradient(ellipse_at_bottom,oklch(0.97_0.035_80)_0%,transparent_50%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,oklch(0.94_0.03_92)_0%,transparent_58%),radial-gradient(ellipse_at_bottom,oklch(0.98_0.015_95)_0%,transparent_50%)]"
       />
       <div className="relative flex min-h-dvh w-full flex-col px-6 py-6 sm:px-10 sm:py-8">
         <header className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <Mark className="size-10 sm:size-11" />
-            <div>
-              <p className="font-heading text-base leading-tight sm:text-lg">
-                {company.name}
-              </p>
-              <p className="text-xs tracking-wide text-muted-foreground">
-                {company.building}
-              </p>
-            </div>
+            <p className="font-heading text-base leading-tight sm:text-lg">
+              {company.name}
+            </p>
           </div>
           <Clock initialIso={now} withDate />
         </header>
