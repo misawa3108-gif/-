@@ -143,7 +143,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
     return (
       <LobbyFrame now={snapshot.now} wide onBack={goAttract}>
         <div className="flex flex-1 flex-col items-center justify-center px-2 py-10 text-center">
-          <p className="text-xs tracking-[0.32em] text-primary sm:text-sm">
+          <p className="font-heading text-3xl tracking-[0.18em] text-foreground sm:text-4xl">
             {greeting(new Date(snapshot.now))}
           </p>
           <h1 className="mt-5 font-heading text-5xl leading-none tracking-tight sm:text-6xl">
