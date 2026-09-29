@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { AttractScreen } from "@/components/lobby/attract";
 import { HostPicker } from "@/components/lobby/host-picker";
 import { LobbyFrame } from "@/components/lobby/frame";
-import { PassCard } from "@/components/lobby/pass-card";
 import { useReception } from "@/components/reception/use-reception";
 import { directArrivalAction, guestAction, interviewAction } from "@/lib/actions";
 import { INTERVIEW_HOST_ID, SERVICE_HOST_ID } from "@/lib/company";
@@ -425,39 +424,22 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
   }
 
   const host = findHost(snapshot.hosts, screen.visit.hostId);
-  const notice = snapshot.notices.find((item) => item.visitId === screen.visit.id);
-  const deliveryDone = screen.visit.purpose === "delivery";
-  const workDone = screen.visit.purpose === "work";
-  const interviewDone = screen.visit.purpose === "interview";
-  const who = host ? `${host.name}さんの携帯` : "担当者の携帯";
+  const who = host ? `${host.name}さん` : "担当者";
   return (
     <LobbyFrame now={snapshot.now} onBack={goAttract} title="受付が完了しました">
-      <PassCard visit={screen.visit} host={host} />
-      <p className="mt-6 text-sm leading-relaxed text-muted-foreground sm:text-base">
-        {deliveryDone
-          ? `${who}へ配達の連絡を送りました。お荷物は受付カウンターへお渡しください。`
-          : workDone
-            ? `${who}へ工事・作業の到着を連絡しました。受付で入館のご案内をお受けください。`
-            : interviewDone
-              ? `${who}へ面接の到着を連絡しました。ロビーで少々お待ちください。`
-              : `${who}へ来客の到着を連絡しました。ロビーで少々お待ちください。`}
-      </p>
-      {notice ? (
-        <div className="mt-4 rounded-3xl bg-secondary px-5 py-4" aria-live="polite">
-          <p className="text-xs tracking-[0.14em] text-muted-foreground">
-            送信した連絡
-          </p>
-          <p className="mt-2 text-sm leading-relaxed">{notice.body}</p>
-        </div>
-      ) : null}
-      <Button
-        type="button"
-        variant="outline"
-        className="mt-6 h-12 rounded-2xl"
-        onClick={goAttract}
-      >
-        最初の画面へ戻る（{secondsLeft}秒）
-      </Button>
+      <div className="flex flex-col items-center">
+        <p className="text-center text-base leading-relaxed sm:text-lg">
+          {who}へ連絡しました。
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          className="mt-8 h-12 rounded-2xl"
+          onClick={goAttract}
+        >
+          最初の画面へ戻る（{secondsLeft}秒）
+        </Button>
+      </div>
     </LobbyFrame>
   );
 }
