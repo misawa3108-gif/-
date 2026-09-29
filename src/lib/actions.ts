@@ -11,11 +11,14 @@ import {
   markNoticesRead,
   notifyHost,
   readSnapshot,
+  updateHostContact,
   resetDemo,
   updateVisitStatus,
 } from "@/lib/store";
 import type {
   ActionResult,
+  ContactInput,
+  ContactResult,
   DeliveryInput,
   GuestInput,
   InterviewInput,
@@ -74,6 +77,12 @@ export async function statusAction(
   status: VisitStatus,
 ): Promise<ActionResult> {
   return asResult(await updateVisitStatus(visitId, status));
+}
+
+export async function contactAction(input: ContactInput): Promise<ContactResult> {
+  const outcome = await updateHostContact(input);
+  if ("message" in outcome) return { ok: false, message: outcome.message };
+  return { ok: true, snapshot: outcome.snapshot };
 }
 
 export async function notifyAction(visitId: string): Promise<ActionResult> {

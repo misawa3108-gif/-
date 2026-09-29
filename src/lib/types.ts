@@ -19,6 +19,10 @@ export const VISIT_STATUSES = [
 
 export type VisitStatus = (typeof VISIT_STATUSES)[number];
 
+export const CONTACT_CHANNELS = ["mobile", "wowtalk"] as const;
+
+export type ContactChannel = (typeof CONTACT_CHANNELS)[number];
+
 export type Host = {
   id: string;
   name: string;
@@ -26,6 +30,8 @@ export type Host = {
   title: string;
   extension: string;
   mobile: string;
+  contactChannel: ContactChannel;
+  wowtalkId: string;
   floor: string;
 };
 
@@ -34,6 +40,7 @@ export type Notice = {
   visitId: string;
   hostId: string;
   phone: string;
+  channel: ContactChannel;
   body: string;
   sentAt: string;
   readAt: string | null;
@@ -105,6 +112,17 @@ export type GuestInput = {
 export type InterviewInput = {
   visitorName: string;
 };
+
+export type ContactInput = {
+  hostId: string;
+  contactChannel: ContactChannel;
+  mobile: string;
+  wowtalkId: string;
+};
+
+export type ContactResult =
+  | { ok: true; snapshot: Snapshot }
+  | { ok: false; message: string };
 
 export type Database = {
   hosts: Host[];

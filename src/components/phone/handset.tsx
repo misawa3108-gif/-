@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Mark } from "@/components/reception/mark";
 import { useReception } from "@/components/reception/use-reception";
 import { markReadAction } from "@/lib/actions";
+import { contactChannel, contactNoun } from "@/lib/contacts";
 import { company } from "@/lib/company";
 import { formatMobile } from "@/lib/notices";
 import { formatTokyoClock, formatTokyoTime } from "@/lib/time";
-import type { Snapshot } from "@/lib/types";
+import type { Host, Snapshot } from "@/lib/types";
 import { findHost } from "@/lib/visits";
 import { cn } from "@/lib/utils";
 
@@ -59,8 +60,8 @@ export function Handset({ initial }: { initial: Snapshot }) {
     setFreshIds(arrived.map((notice) => notice.id));
     const person = findHost(snapshot.hosts, newest.hostId);
     const label = person
-      ? `${person.name}の携帯に届きました`
-      : "携帯に連絡が届きました";
+      ? `${person.name}の${contactNoun(person)}に届きました`
+      : "連絡が届きました";
     setBanner(label);
     toast.message(label);
   }, [snapshot.notices, snapshot.hosts]);
@@ -99,7 +100,7 @@ export function Handset({ initial }: { initial: Snapshot }) {
           <div className="flex items-center gap-3">
             <Mark className="size-9" />
             <div>
-              <p className="font-heading text-lg leading-tight">担当者の携帯</p>
+              <p className="font-heading text-lg leading-tight">担当者への連絡</p>
               <p className="text-xs text-muted-foreground">
                 {company.name} · 受付からの連絡
               </p>
@@ -119,7 +120,7 @@ export function Handset({ initial }: { initial: Snapshot }) {
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-5">
         <div>
           <p className="text-xs tracking-[0.14em] text-muted-foreground">
-            表示している携帯
+            表示している連絡先
           </p>
           <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
             {snapshot.hosts.map((person) => {
@@ -150,7 +151,7 @@ export function Handset({ initial }: { initial: Snapshot }) {
                           : "text-muted-foreground",
                       )}
                     >
-                      {person.department}
+                      {person.department} · {contactNoun(person)}
                     </span>
                   </span>
                   {unread > 0 ? (
@@ -171,7 +172,7 @@ export function Handset({ initial }: { initial: Snapshot }) {
           <div className="flex h-[680px] flex-col overflow-hidden rounded-[1.8rem] bg-background">
             <div className="flex items-center justify-between px-5 pt-3 text-[11px] text-muted-foreground tabular-nums">
               <span>{formatTokyoClock(clock)}</span>
-              <span>{host ? formatMobile(host.mobile) : ""}</span>
+              <span>{host ? handsetDestination(host) : ""}</span>
             </div>
             <div className="border-b px-5 py-3">
               <p className="text-xs text-muted-foreground">メッセージ</p>
@@ -180,7 +181,7 @@ export function Handset({ initial }: { initial: Snapshot }) {
               </p>
               <p className="text-xs text-muted-foreground">
                 {host
-                  ? `${host.department} · ${host.title}`
+                  ? `${host.department} · ${host.title} · ${contactNoun(host)}`
                   : "担当者を選んでください"}
               </p>
             </div>
@@ -196,7 +197,7 @@ export function Handset({ initial }: { initial: Snapshot }) {
               {thread.length === 0 ? (
                 <div className="flex h-full items-center justify-center px-4 text-center">
                   <p className="text-sm leading-relaxed text-muted-foreground">
-                    今日の連絡はまだありません。来客が受付すると、この携帯に届きます。
+                    今日の連絡はまだありません。来客が受付すると、この{host ? contactNoun(host) : "連絡先"}に届きます。
                   </p>
                 </div>
               ) : (
@@ -223,4 +224,11 @@ export function Handset({ initial }: { initial: Snapshot }) {
       </main>
     </div>
   );
+}
+
+function handsetDestination(host: Host): string {
+  if (contactChannel(host) === "wowtalk") {
+    return host.wowtalkId.trim() ? `WowTalk ${host.wowtalkId.trim()}` : "WowTalk ID未設定";
+  }
+  return formatMobile(host.mobile);
 }

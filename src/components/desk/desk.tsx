@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { Bell, Phone, RotateCcw, Search } from "lucide-react";
 import { toast } from "sonner";
+import { ContactSettings } from "@/components/desk/contacts";
 import { Clock } from "@/components/reception/clock";
 import { Mark } from "@/components/reception/mark";
 import { StatusBadge } from "@/components/reception/status-badge";
@@ -20,15 +21,17 @@ import {
 import { Input } from "@/components/ui/input";
 import {
   checkInAction,
+  contactAction,
   notifyAction,
   resetDemoAction,
   statusAction,
 } from "@/lib/actions";
+import { contactChannel, contactNoun, contactReady } from "@/lib/contacts";
 import { company } from "@/lib/company";
 import { PURPOSE_LABEL } from "@/lib/labels";
 import { formatMobile } from "@/lib/notices";
 import { formatTokyoTime, minutesSince } from "@/lib/time";
-import type { Snapshot, Visit, VisitStatus } from "@/lib/types";
+import type { ContactChannel, Host, Snapshot, Visit, VisitStatus } from "@/lib/types";
 import {
   findHost,
   isLate,
@@ -122,7 +125,7 @@ export function Desk({ initial }: { initial: Snapshot }) {
           <div className="flex items-center gap-3 sm:gap-5">
             <Clock initialIso={snapshot.now} className="hidden sm:block" />
             <Button asChild variant="outline" className="h-10 rounded-full px-4">
-              <Link href="/phone">担当者の携帯</Link>
+              <Link href="/phone">担当者への連絡</Link>
             </Button>
             <Button asChild variant="outline" className="h-10 rounded-full px-4">
               <Link href="/">来客画面</Link>
@@ -143,6 +146,29 @@ export function Desk({ initial }: { initial: Snapshot }) {
           <Stat label="来訪予定" value={counts.expected} hint="まだ受付前" />
           <Stat label="退館" value={counts.left} hint="本日分" />
         </section>
+
+        <ContactSettings
+          hosts={snapshot.hosts}
+          pendingId={pending ? pendingId : null}
+          onSave={(host, channel, mobile, wowtalkId) => {
+            setPendingId(host.id);
+            startTransition(async () => {
+              const result = await contactAction({
+                hostId: host.id,
+                contactChannel: channel,
+                mobile,
+                wowtalkId,
+              });
+              setPendingId(null);
+              if (!result.ok) {
+                toast.error(result.message);
+                return;
+              }
+              replace(result.snapshot);
+              toast.success(savedContact(host, channel, wowtalkId));
+            });
+          }}
+        />
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-1 overflow-x-auto">
@@ -209,8 +235,8 @@ export function Desk({ initial }: { initial: Snapshot }) {
                     visit.id,
                     () => notifyAction(visit.id),
                     host
-                      ? `${host.name}の携帯へ連絡しました`
-                      : "携帯へ連絡しました",
+                      ? `${host.name}の${contactNoun(host)}へ連絡しました`
+                      : "連絡しました",
                   );
                 }}
               />
@@ -354,18 +380,19 @@ function VisitCard({
               : "担当者未設定"}
           </p>
           <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            {hostName?.mobile ? (
+            {hostName ? (
               <span className="inline-flex items-center gap-1">
                 <Phone className="size-3.5" />
-                {formatMobile(hostName.mobile)}
+                {contactLine(hostName)}
               </span>
             ) : (
-              <span>携帯未登録</span>
+              <span>連絡先未設定</span>
             )}
             {visit.notifiedAt ? (
               <span className="inline-flex items-center gap-1">
                 <Bell className="size-3.5" />
-                {formatTokyoTime(visit.notifiedAt)} 携帯へ送信済み
+                {formatTokyoTime(visit.notifiedAt)}{" "}
+                {hostName ? `${contactNoun(hostName)}へ送信済み` : "送信済み"}
               </span>
             ) : (
               <span>未連絡</span>
@@ -416,10 +443,12 @@ function VisitCard({
               type="button"
               variant="outline"
               className="h-10 rounded-full px-4"
-              disabled={busy || !visit.hostId || !hostName?.mobile}
+              disabled={busy || !visit.hostId || !hostName || !contactReady(hostName)}
               onClick={onNotify}
             >
-              {visit.notifiedAt ? "携帯へ再連絡" : "携帯へ連絡"}
+              {visit.notifiedAt
+                ? `${hostName ? contactNoun(hostName) : "連絡先"}へ再連絡`
+                : `${hostName ? contactNoun(hostName) : "連絡先"}へ連絡`}
             </Button>
           ) : null}
           {visit.status === "expected" || visit.status === "waiting" ? (
@@ -442,6 +471,24 @@ function VisitCard({
       </div>
     </li>
   );
+}
+
+function contactLine(host: Host): string {
+  if (contactChannel(host) === "wowtalk") {
+    return host.wowtalkId.trim()
+      ? `WowTalk ${host.wowtalkId.trim()}`
+      : "WowTalk（あとから設定）";
+  }
+  return host.mobile.trim() ? formatMobile(host.mobile) : "携帯未登録";
+}
+
+function savedContact(host: Host, channel: ContactChannel, wowtalkId: string): string {
+  if (channel === "wowtalk") {
+    return wowtalkId.trim()
+      ? `${host.name}の連絡先をWowTalk（${wowtalkId.trim()}）にしました。`
+      : `${host.name}の連絡先をWowTalkにしました。IDはあとから設定できます。`;
+  }
+  return `${host.name}の連絡先を携帯にしました。`;
 }
 
 function describeTiming(visit: Visit, now: Date): { label: string; value: string } {

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { contactNoun } from "@/lib/contacts";
 import type { Host } from "@/lib/types";
 import { normalizeQuery } from "@/lib/visits";
 import { cn } from "@/lib/utils";
@@ -82,7 +83,7 @@ export function HostPicker({
                             {host.name}
                           </span>
                           <span className="mt-0.5 block text-xs text-muted-foreground">
-                            {host.title}
+                            {host.title} · {contactNoun(host)}
                           </span>
                         </span>
                         <span className="shrink-0 text-sm text-muted-foreground tabular-nums">

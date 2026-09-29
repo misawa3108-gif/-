@@ -11,6 +11,7 @@ import { HostPicker } from "@/components/lobby/host-picker";
 import { LobbyFrame } from "@/components/lobby/frame";
 import { useReception } from "@/components/reception/use-reception";
 import { directArrivalAction, guestAction, interviewAction } from "@/lib/actions";
+import { contactNoun } from "@/lib/contacts";
 import { INTERVIEW_HOST_ID, SERVICE_HOST_ID } from "@/lib/company";
 import { greeting } from "@/lib/time";
 import type { Snapshot, Visit } from "@/lib/types";
@@ -137,6 +138,8 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
   }
 
   if (screen.name === "home") {
+    const interviewer = findHost(snapshot.hosts, INTERVIEW_HOST_ID);
+    const serviceContact = findHost(snapshot.hosts, SERVICE_HOST_ID);
     return (
       <LobbyFrame now={snapshot.now} wide onBack={goAttract}>
         <div className="flex flex-1 flex-col items-center justify-center px-2 py-10 text-center">
@@ -147,7 +150,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
             ご用件をお選びください
           </h1>
           <p className="mt-5 max-w-md text-sm leading-relaxed text-muted-foreground sm:text-base">
-            あてはまる受付をタッチしてください。記入が終わると、担当者の携帯へ連絡します。
+            あてはまる受付をタッチしてください。記入が終わると、担当者の連絡先へ連絡します。
           </p>
 
           <div className="mt-12 grid w-full gap-3 text-left sm:grid-cols-3 sm:gap-4">
@@ -164,7 +167,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
             <Choice
               icon={<Briefcase />}
               title="面接用"
-              body="訪問者の名前だけ記入します。人事担当の携帯へ連絡します。"
+              body={`訪問者の名前だけ記入します。人事担当の${contactNoun(interviewer)}へ連絡します。`}
               onClick={() => {
                 setError("");
                 setInterview(emptyInterview());
@@ -174,7 +177,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
             <Choice
               icon={<HardHat />}
               title="配送・工事用"
-              body="配送か工事・作業を選ぶと、担当者の携帯へ直接連絡します。"
+              body={`配送か工事・作業を選ぶと、担当者の${contactNoun(serviceContact)}へ直接連絡します。`}
               onClick={() => {
                 setError("");
                 setScreen({ name: "service" });
@@ -188,6 +191,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
 
   if (screen.name === "guest" || screen.name === "guest-confirm") {
     const host = findHost(snapshot.hosts, guest.hostId);
+    const via = contactNoun(host);
     const confirming = screen.name === "guest-confirm";
     return (
       <LobbyFrame
@@ -196,7 +200,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
         title={confirming ? "この内容で連絡します" : "来客の受付"}
         lede={
           confirming
-            ? "アポの相手の携帯へ、到着の連絡を送ります。"
+            ? `アポの相手の${via}へ、到着の連絡を送ります。`
             : "会社名、訪問者の名前、誰に対してのアポかを記入してください。"
         }
       >
@@ -210,7 +214,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
                   "アポの相手",
                   host ? `${host.name}（${host.department}・${host.floor}）` : "—",
                 ],
-                ["連絡先", host ? `${host.name}の携帯` : "—"],
+                ["連絡先", host ? `${host.name}の${via}` : "—"],
               ]}
             />
             <Button
@@ -233,7 +237,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
                 });
               }}
             >
-              {pending ? "連絡しています…" : "携帯へ連絡する"}
+              {pending ? "連絡しています…" : `${via}へ連絡する`}
             </Button>
           </>
         ) : (
@@ -316,11 +320,11 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
         now={snapshot.now}
         onBack={pending ? undefined : back}
         title="面接の受付"
-        lede="訪問者の名前だけ記入してください。人事担当の携帯へ連絡します。"
+        lede={`訪問者の名前だけ記入してください。人事担当の${contactNoun(interviewer)}へ連絡します。`}
       >
         {!interviewer ? (
           <div className="rounded-2xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-            面接担当者の携帯が登録されていません。受付カウンターへお声がけください。
+            面接担当者の連絡先が登録されていません。受付カウンターへお声がけください。
           </div>
         ) : (
           <form
@@ -362,7 +366,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
             </Field>
             <p className="rounded-2xl bg-secondary px-4 py-3 text-sm leading-relaxed text-secondary-foreground">
               送信すると、{interviewer.department} {interviewer.name}
-              の携帯へ連絡します。お名前以外の記入はありません。
+              の{contactNoun(interviewer)}へ連絡します。お名前以外の記入はありません。
             </p>
             {error ? (
               <p className="text-sm text-destructive" role="alert">
@@ -391,29 +395,29 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
         title="配送・工事"
         lede={
           pending
-            ? "担当者の携帯へ連絡しています…"
+            ? "担当者へ連絡しています…"
             : contact
-              ? `選ぶと、${contact.department} ${contact.name}の携帯へすぐに連絡します。`
-              : "担当者の携帯が登録されていません。"
+              ? `選ぶと、${contact.department} ${contact.name}の${contactNoun(contact)}へすぐに連絡します。`
+              : "担当者の連絡先が登録されていません。"
         }
       >
         {!contact ? (
           <div className="rounded-2xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-            担当者の携帯が登録されていません。受付カウンターへお声がけください。
+            担当者の連絡先が登録されていません。受付カウンターへお声がけください。
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
             <Choice
               icon={<Truck />}
               title="配送"
-              body="選んだ時点で、担当者の携帯へ配送の到着を連絡します。"
+              body={`選んだ時点で、担当者の${contactNoun(contact)}へ配送の到着を連絡します。`}
               disabled={pending}
               onClick={() => arrive("delivery")}
             />
             <Choice
               icon={<HardHat />}
               title="工事・作業"
-              body="選んだ時点で、担当者の携帯へ工事・作業の到着を連絡します。"
+              body={`選んだ時点で、担当者の${contactNoun(contact)}へ工事・作業の到着を連絡します。`}
               disabled={pending}
               onClick={() => arrive("work")}
             />

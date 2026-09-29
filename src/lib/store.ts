@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { contactChannel, contactReady } from "@/lib/contacts";
 import { INTERVIEW_HOST_ID, SERVICE_HOST_ID } from "@/lib/company";
 import { noticeBody } from "@/lib/notices";
 import { HOSTS, seedDatabase } from "@/lib/seed";
@@ -7,6 +8,7 @@ import { tokyoDateKey } from "@/lib/time";
 import type {
   Database,
   DeliveryInput,
+  ContactInput,
   GuestInput,
   Host,
   InterviewInput,
@@ -58,8 +60,22 @@ function hydrate(db: Database): Database {
     changed = true;
   }
   for (const host of db.hosts) {
-    if (typeof host.mobile === "string" && host.mobile.length > 0) continue;
-    host.mobile = HOSTS.find((person) => person.id === host.id)?.mobile ?? "";
+    if (host.contactChannel !== "mobile" && host.contactChannel !== "wowtalk") {
+      host.contactChannel = "mobile";
+      changed = true;
+    }
+    if (typeof host.wowtalkId !== "string") {
+      host.wowtalkId = "";
+      changed = true;
+    }
+    if (typeof host.mobile !== "string" || host.mobile.length === 0) {
+      host.mobile = HOSTS.find((person) => person.id === host.id)?.mobile ?? "";
+      changed = true;
+    }
+  }
+  for (const notice of db.notices) {
+    if (notice.channel === "mobile" || notice.channel === "wowtalk") continue;
+    notice.channel = "mobile";
     changed = true;
   }
   if (changed) {
@@ -196,9 +212,12 @@ function blankVisit(db: Database, now: Date): Visit {
   };
 }
 
+const MISSING_CONTACT =
+  "担当者の連絡先が未登録です。受付カウンターへお声がけください。";
+
 function reachableHost(hosts: Host[], hostId: string): Host | null {
   const host = requireHost(hosts, hostId);
-  if (!host?.mobile) return null;
+  if (!host || !contactReady(host)) return null;
   return host;
 }
 
@@ -210,7 +229,8 @@ function sendNotice(db: Database, visit: Visit, sentAt: string): Notice | null {
     id: crypto.randomUUID(),
     visitId: visit.id,
     hostId: host.id,
-    phone: host.mobile,
+    phone: contactChannel(host) === "wowtalk" ? host.wowtalkId.trim() : host.mobile,
+    channel: contactChannel(host),
     body: noticeBody(visit, host),
     sentAt,
     readAt: null,
@@ -261,7 +281,7 @@ export function checkInAppointment(
     if (!visit.hostId || !reachableHost(db.hosts, visit.hostId)) {
       return {
         message:
-          "担当者の携帯番号が未登録です。受付カウンターへお声がけください。",
+          MISSING_CONTACT,
       };
     }
     const nowIso = new Date().toISOString();
@@ -289,7 +309,7 @@ export function createWalkIn(
     if (!reachableHost(db.hosts, input.hostId)) {
       return {
         message:
-          "担当者の携帯番号が未登録です。受付カウンターへお声がけください。",
+          MISSING_CONTACT,
       };
     }
     const now = new Date();
@@ -324,7 +344,7 @@ export function createDelivery(
     if (!reachableHost(db.hosts, input.hostId)) {
       return {
         message:
-          "宛先の担当者の携帯番号が未登録です。受付カウンターへお声がけください。",
+          MISSING_CONTACT,
       };
     }
     const now = new Date();
@@ -359,7 +379,7 @@ export function createWork(
     if (!reachableHost(db.hosts, input.hostId)) {
       return {
         message:
-          "担当者の携帯番号が未登録です。受付カウンターへお声がけください。",
+          MISSING_CONTACT,
       };
     }
     const now = new Date();
@@ -388,7 +408,7 @@ export function createGuest(
     const db = load();
     if (!reachableHost(db.hosts, input.hostId)) {
       return {
-        message: "アポの相手を選んでください。携帯番号が未登録の場合は受付へお声がけください。",
+        message: "アポの相手を選んでください。連絡先が未登録の場合は受付へお声がけください。",
       };
     }
     const now = new Date();
@@ -416,7 +436,7 @@ export function createInterview(
     if (!interviewer) {
       return {
         message:
-          "面接担当者の携帯が登録されていません。受付カウンターへお声がけください。",
+          "面接担当者の連絡先が登録されていません。受付カウンターへお声がけください。",
       };
     }
     const now = new Date();
@@ -440,7 +460,7 @@ export function createDirectArrival(
     if (!contact) {
       return {
         message:
-          "担当者の携帯が登録されていません。受付カウンターへお声がけください。",
+          MISSING_CONTACT,
       };
     }
     const now = new Date();
@@ -476,6 +496,31 @@ export function updateVisitStatus(
   });
 }
 
+export function updateHostContact(
+  input: ContactInput,
+): Promise<{ snapshot: Snapshot } | { message: string }> {
+  return withLock(() => {
+    if (input.contactChannel !== "mobile" && input.contactChannel !== "wowtalk") {
+      return { message: "連絡方法を選べませんでした。" };
+    }
+    const db = load();
+    const host = db.hosts.find((item) => item.id === input.hostId);
+    if (!host) return { message: "担当者が見つかりません。" };
+    const mobile = clean(input.mobile, 20);
+    const wowtalkId = clean(input.wowtalkId, 40);
+    if (input.contactChannel === "mobile" && !mobile) {
+      return {
+        message: "携帯番号を入力するか、連絡先をWowTalkに変更してください。",
+      };
+    }
+    host.contactChannel = input.contactChannel;
+    if (mobile) host.mobile = mobile;
+    host.wowtalkId = wowtalkId;
+    persist(db);
+    return { snapshot: toSnapshot(db) };
+  });
+}
+
 export function notifyHost(
   visitId: string,
 ): Promise<{ snapshot: Snapshot; visit: Visit } | { message: string }> {
@@ -488,10 +533,10 @@ export function notifyHost(
       return { message: "この来訪には通知できません。" };
     }
     if (!reachableHost(db.hosts, visit.hostId)) {
-      return { message: "担当者の携帯番号が未登録です。" };
+      return { message: "担当者の連絡先が未登録です。" };
     }
     const sent = sendNotice(db, visit, new Date().toISOString());
-    if (!sent) return { message: "携帯へ連絡できませんでした。" };
+    if (!sent) return { message: "連絡できませんでした。" };
     persist(db);
     return { snapshot: toSnapshot(db), visit: { ...visit } };
   });
