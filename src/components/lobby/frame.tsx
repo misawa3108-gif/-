@@ -30,7 +30,7 @@ export function LobbyFrame({
     <div className="relative min-h-dvh">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,oklch(0.92_0.03_165)_0%,transparent_52%),radial-gradient(ellipse_at_bottom_right,oklch(0.94_0.025_85)_0%,transparent_46%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,oklch(0.76_0.15_50)_0%,transparent_54%),radial-gradient(ellipse_at_bottom_right,oklch(0.9_0.09_72)_0%,transparent_48%)]"
       />
       <div className="relative mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 py-5 sm:px-8 sm:py-7">
         <header className="flex items-start justify-between gap-4">

@@ -20,7 +20,7 @@ export function AttractScreen({
       <span className="sr-only">画面にタッチして受付を始める</span>
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,oklch(0.93_0.035_165)_0%,transparent_55%),radial-gradient(ellipse_at_bottom,oklch(0.94_0.03_85)_0%,transparent_48%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,oklch(0.75_0.16_52)_0%,transparent_58%),radial-gradient(ellipse_at_bottom,oklch(0.9_0.1_70)_0%,transparent_50%)]"
       />
       <div className="relative flex min-h-dvh w-full flex-col px-6 py-6 sm:px-10 sm:py-8">
         <header className="flex items-start justify-between gap-4">
