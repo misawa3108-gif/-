@@ -430,8 +430,11 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
   return (
     <LobbyFrame now={snapshot.now} onBack={goAttract} title="受付が完了しました">
       <div className="flex flex-col items-center">
-        <p className="text-center text-base leading-relaxed sm:text-lg">
+        <p className="max-w-md text-center text-base leading-relaxed sm:text-lg">
           {who}へ連絡しました。
+        </p>
+        <p className="mt-3 max-w-md text-center text-base leading-relaxed sm:text-lg">
+          担当者が参りますので、しばらくお待ちください。
         </p>
         <Button
           type="button"
