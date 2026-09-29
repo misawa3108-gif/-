@@ -3,6 +3,7 @@ export const PURPOSES = [
   "interview",
   "sales",
   "delivery",
+  "work",
   "other",
 ] as const;
 
@@ -73,6 +74,14 @@ export type DeliveryInput = {
   parcelCount: number;
   hostId: string;
   purposeNote: string;
+};
+
+export type WorkInput = {
+  visitorName: string;
+  visitorCompany: string;
+  partySize: number;
+  purposeNote: string;
+  hostId: string;
 };
 
 export type Database = {

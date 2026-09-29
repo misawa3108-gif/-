@@ -208,6 +208,24 @@ export function seedDatabase(now = new Date()): Database {
       leftAt: null,
       notifiedAt: null,
     }),
+    visit(now, {
+      id: "seed-aoki",
+      receptionNumber: "A-008",
+      visitorName: "青木 剛",
+      visitorCompany: "港設備工業",
+      partySize: 2,
+      purpose: "work",
+      purposeNote: "8F 空調の定期点検",
+      hostId: "host-watanabe",
+      status: "waiting",
+      hasAppointment: false,
+      carrier: null,
+      scheduledAt: null,
+      checkedInAt: at(-8),
+      meetingStartedAt: null,
+      leftAt: null,
+      notifiedAt: at(-8),
+    }),
   ];
 
   return {

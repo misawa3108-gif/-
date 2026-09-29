@@ -4,6 +4,7 @@ import {
   checkInAppointment,
   createDelivery,
   createWalkIn,
+  createWork,
   notifyHost,
   readSnapshot,
   resetDemo,
@@ -16,6 +17,7 @@ import type {
   Visit,
   VisitStatus,
   WalkInInput,
+  WorkInput,
 } from "@/lib/types";
 
 function asResult(
@@ -39,6 +41,10 @@ export async function walkInAction(input: WalkInInput): Promise<ActionResult> {
 
 export async function deliveryAction(input: DeliveryInput): Promise<ActionResult> {
   return asResult(await createDelivery(input));
+}
+
+export async function workAction(input: WorkInput): Promise<ActionResult> {
+  return asResult(await createWork(input));
 }
 
 export async function statusAction(

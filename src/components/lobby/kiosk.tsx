@@ -1,13 +1,21 @@
 "use client";
 
-import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { useCallback, useEffect, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
-import { Briefcase, ChevronRight, Package, Search, UserRound } from "lucide-react";
+import {
+  Briefcase,
+  ChevronRight,
+  HardHat,
+  Search,
+  Truck,
+  UserRound,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { AttractScreen } from "@/components/lobby/attract";
 import { HostPicker } from "@/components/lobby/host-picker";
 import { LobbyFrame } from "@/components/lobby/frame";
 import { PassCard } from "@/components/lobby/pass-card";
@@ -16,6 +24,7 @@ import {
   checkInAction,
   deliveryAction,
   walkInAction,
+  workAction,
 } from "@/lib/actions";
 import { company } from "@/lib/company";
 import { CARRIERS, PURPOSE_LABEL, VISITOR_PURPOSES } from "@/lib/labels";
@@ -31,11 +40,14 @@ import {
 import { cn } from "@/lib/utils";
 
 type Screen =
+  | { name: "attract" }
   | { name: "home" }
   | { name: "appointment"; lane: AppointmentLane }
   | { name: "appointment-confirm"; visitId: string; lane: AppointmentLane }
   | { name: "walkin"; lane: AppointmentLane; step: 0 | 1 | 2 | 3 }
+  | { name: "service" }
   | { name: "delivery"; step: 0 | 1 | 2 }
+  | { name: "work"; step: 0 | 1 }
   | { name: "done"; visit: Visit };
 
 type WalkInDraft = {
@@ -56,9 +68,19 @@ type DeliveryDraft = {
   purposeNote: string;
 };
 
+type WorkDraft = {
+  visitorName: string;
+  visitorCompany: string;
+  partySize: number;
+  hostId: string;
+  purposeNote: string;
+};
+
 const WALK_STEPS = ["ご用件", "担当者", "お客様情報", "確認"];
 const INTERVIEW_STEPS = ["面接官", "お名前", "確認"];
 const DELIVERY_STEPS = ["配送会社", "お荷物", "確認"];
+const WORK_STEPS = ["作業内容", "確認"];
+const IDLE_MS = 90_000;
 
 const emptyWalkIn = (): WalkInDraft => ({
   purpose: "meeting",
@@ -78,31 +100,45 @@ const emptyDelivery = (): DeliveryDraft => ({
   purposeNote: "",
 });
 
+const emptyWork = (): WorkDraft => ({
+  visitorName: "",
+  visitorCompany: "",
+  partySize: 1,
+  hostId: "",
+  purposeNote: "",
+});
+
 export function Kiosk({ initial }: { initial: Snapshot }) {
   const { snapshot, replace } = useReception(initial);
-  const [screen, setScreen] = useState<Screen>({ name: "home" });
+  const [screen, setScreen] = useState<Screen>({ name: "attract" });
   const [query, setQuery] = useState("");
   const [walkIn, setWalkIn] = useState<WalkInDraft>(emptyWalkIn);
   const [delivery, setDelivery] = useState<DeliveryDraft>(emptyDelivery);
+  const [work, setWork] = useState<WorkDraft>(emptyWork);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const [secondsLeft, setSecondsLeft] = useState(24);
   const [returnAt, setReturnAt] = useState<number | null>(null);
+
+  const goAttract = useCallback(() => {
+    setError("");
+    setQuery("");
+    setReturnAt(null);
+    setWalkIn(emptyWalkIn());
+    setDelivery(emptyDelivery());
+    setWork(emptyWork());
+    setScreen({ name: "attract" });
+  }, []);
 
   useEffect(() => {
     if (returnAt === null) return;
     const id = setInterval(() => {
       const left = Math.max(0, Math.ceil((returnAt - Date.now()) / 1000));
       setSecondsLeft(left);
-      if (left <= 0) {
-        setReturnAt(null);
-        setQuery("");
-        setError("");
-        setScreen({ name: "home" });
-      }
+      if (left <= 0) goAttract();
     }, 250);
     return () => clearInterval(id);
-  }, [returnAt]);
+  }, [returnAt, goAttract]);
 
   function goHome() {
     setError("");
@@ -110,6 +146,14 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
     setReturnAt(null);
     setScreen({ name: "home" });
   }
+
+  useEffect(() => {
+    if (screen.name === "attract" || screen.name === "done" || pending) return;
+    const id = window.setTimeout(() => {
+      goAttract();
+    }, IDLE_MS);
+    return () => window.clearTimeout(id);
+  }, [screen, query, walkIn, delivery, work, pending, goAttract]);
 
   function openLane(lane: AppointmentLane) {
     setError("");
@@ -138,7 +182,11 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
 
   function back() {
     setError("");
-    if (screen.name === "appointment" || screen.name === "done") {
+    if (screen.name === "done") {
+      goAttract();
+      return;
+    }
+    if (screen.name === "appointment") {
       goHome();
       return;
     }
@@ -159,9 +207,18 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
       });
       return;
     }
+    if (screen.name === "service") {
+      goHome();
+      return;
+    }
     if (screen.name === "delivery") {
-      if (screen.step === 0) goHome();
+      if (screen.step === 0) setScreen({ name: "service" });
       else setScreen({ name: "delivery", step: (screen.step - 1) as 0 | 1 });
+      return;
+    }
+    if (screen.name === "work") {
+      if (screen.step === 0) setScreen({ name: "service" });
+      else setScreen({ name: "work", step: 0 });
     }
   }
 
@@ -171,19 +228,22 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
       : [];
   const typed = normalizeQuery(query).length > 0;
 
+  if (screen.name === "attract") {
+    return <AttractScreen now={snapshot.now} onStart={() => setScreen({ name: "home" })} />;
+  }
+
   if (screen.name === "home") {
     return (
-      <LobbyFrame now={snapshot.now} wide>
+      <LobbyFrame now={snapshot.now} wide onBack={goAttract}>
         <div className="flex flex-1 flex-col">
           <p className="text-sm tracking-[0.18em] text-primary">
-            {company.building}
+            {greeting(new Date(snapshot.now))}
           </p>
           <h1 className="mt-3 max-w-xl font-heading text-4xl leading-[1.15] tracking-tight sm:text-6xl">
-            {greeting(new Date(snapshot.now))}
-            <span className="mt-1 block">ご来訪ありがとうございます</span>
+            ご用件をお選びください
           </h1>
           <p className="mt-5 max-w-lg text-sm leading-relaxed text-muted-foreground sm:text-base">
-            受付番号をお渡しし、担当者へお知らせします。あてはまる受付を選んでください。
+            あてはまる受付をタッチしてください。受付番号をお渡しし、担当者へお知らせします。
           </p>
 
           <div className="mt-10 grid gap-3 sm:grid-cols-3 sm:gap-4">
@@ -200,13 +260,14 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
               onClick={() => openLane("interview")}
             />
             <Choice
-              icon={<Package />}
-              title="配送関係用"
-              body="宅配や荷物の宛先を記録します。"
+              icon={<HardHat />}
+              title="配送・工事用"
+              body="宅配のお荷物、または工事・作業での入館です。"
               onClick={() => {
                 setDelivery(emptyDelivery());
+                setWork(emptyWork());
                 setError("");
-                setScreen({ name: "delivery", step: 0 });
+                setScreen({ name: "service" });
               }}
             />
           </div>
@@ -613,6 +674,193 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
     );
   }
 
+  if (screen.name === "service") {
+    return (
+      <LobbyFrame
+        now={snapshot.now}
+        onBack={back}
+        title="配送・工事"
+        lede="あてはまる方をタッチしてください。"
+      >
+        <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+          <Choice
+            icon={<Truck />}
+            title="配送"
+            body="宅配やお荷物の受け渡しです。受付カウンターへお渡しください。"
+            onClick={() => {
+              setDelivery(emptyDelivery());
+              setError("");
+              setScreen({ name: "delivery", step: 0 });
+            }}
+          />
+          <Choice
+            icon={<HardHat />}
+            title="工事"
+            body="点検、工事、作業での入館です。担当者へ到着をお知らせします。"
+            onClick={() => {
+              setWork(emptyWork());
+              setError("");
+              setScreen({ name: "work", step: 0 });
+            }}
+          />
+        </div>
+      </LobbyFrame>
+    );
+  }
+
+  if (screen.name === "work") {
+    const host = findHost(snapshot.hosts, work.hostId);
+    return (
+      <LobbyFrame
+        now={snapshot.now}
+        onBack={back}
+        title={screen.step === 0 ? "工事・作業の受付" : "作業の確認"}
+        lede={
+          screen.step === 0
+            ? "会社名と作業内容、ご担当者を入力してください。"
+            : "この内容で担当者へ到着をお知らせします。"
+        }
+        steps={WORK_STEPS}
+        stepIndex={screen.step}
+      >
+        {screen.step === 0 ? (
+          <form
+            className="flex flex-col gap-5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!work.visitorCompany.trim()) {
+                setError("会社名を入力してください。");
+                return;
+              }
+              if (!work.visitorName.trim()) {
+                setError("お名前を入力してください。");
+                return;
+              }
+              if (!work.purposeNote.trim()) {
+                setError("作業内容を入力してください。");
+                return;
+              }
+              if (!work.hostId) {
+                setError("担当者を選択してください。");
+                return;
+              }
+              setError("");
+              setScreen({ name: "work", step: 1 });
+            }}
+          >
+            <Field label="会社名" htmlFor="work-company" required>
+              <Input
+                id="work-company"
+                autoFocus
+                value={work.visitorCompany}
+                onChange={(event) =>
+                  setWork((draft) => ({
+                    ...draft,
+                    visitorCompany: event.target.value,
+                  }))
+                }
+                placeholder="港設備工業"
+                className="h-14 rounded-2xl text-base md:text-base"
+                maxLength={60}
+              />
+            </Field>
+            <Field label="お名前" htmlFor="work-name" required>
+              <Input
+                id="work-name"
+                value={work.visitorName}
+                onChange={(event) =>
+                  setWork((draft) => ({
+                    ...draft,
+                    visitorName: event.target.value,
+                  }))
+                }
+                placeholder="青木 剛"
+                className="h-14 rounded-2xl text-base md:text-base"
+                maxLength={40}
+              />
+            </Field>
+            <Field label="人数">
+              <CountStepper
+                value={work.partySize}
+                min={1}
+                max={20}
+                unit="名"
+                onChange={(partySize) =>
+                  setWork((draft) => ({ ...draft, partySize }))
+                }
+              />
+            </Field>
+            <Field label="作業内容" htmlFor="work-note" required>
+              <Textarea
+                id="work-note"
+                value={work.purposeNote}
+                onChange={(event) =>
+                  setWork((draft) => ({
+                    ...draft,
+                    purposeNote: event.target.value,
+                  }))
+                }
+                placeholder="8F 空調の定期点検"
+                maxLength={120}
+                className="min-h-24 rounded-2xl text-base md:text-base"
+              />
+            </Field>
+            <Field label="ご担当">
+              <HostPicker
+                hosts={snapshot.hosts}
+                value={work.hostId}
+                onChange={(hostId) => setWork((draft) => ({ ...draft, hostId }))}
+              />
+            </Field>
+            {error ? (
+              <p className="text-sm text-destructive" role="alert">
+                {error}
+              </p>
+            ) : null}
+            <Button type="submit" className="h-14 rounded-2xl text-base">
+              確認へ進む
+            </Button>
+          </form>
+        ) : (
+          <>
+            <Summary
+              rows={[
+                ["会社", work.visitorCompany.trim()],
+                ["お名前", work.visitorName.trim()],
+                ["人数", `${work.partySize}名`],
+                ["作業内容", work.purposeNote.trim()],
+                [
+                  "担当",
+                  host
+                    ? `${host.name}（${host.department}・${host.floor}）`
+                    : "—",
+                ],
+              ]}
+            />
+            <Button
+              type="button"
+              disabled={pending}
+              className="mt-6 h-14 w-full rounded-2xl text-base"
+              onClick={() => {
+                startTransition(async () => {
+                  const result = await workAction(work);
+                  if (!result.ok) {
+                    toast.error(result.message);
+                    return;
+                  }
+                  replace(result.snapshot);
+                  complete(result.visit);
+                });
+              }}
+            >
+              この内容で受付する
+            </Button>
+          </>
+        )}
+      </LobbyFrame>
+    );
+  }
+
   if (screen.name === "delivery") {
     const host = findHost(snapshot.hosts, delivery.hostId);
     const carrierName =
@@ -625,7 +873,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
         onBack={back}
         title={
           screen.step === 0
-            ? "配送関係の受付"
+            ? "配送の受付"
             : screen.step === 1
               ? "お荷物の内容"
               : "配達の確認"
@@ -800,27 +1048,30 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
 
   const host = findHost(snapshot.hosts, screen.visit.hostId);
   const deliveryDone = screen.visit.purpose === "delivery";
+  const workDone = screen.visit.purpose === "work";
   const interviewDone = screen.visit.purpose === "interview";
   const who = host
     ? `${host.name}（${host.department}・${host.floor}）`
     : "担当者";
   return (
-    <LobbyFrame now={snapshot.now} onBack={goHome} title="受付が完了しました">
+    <LobbyFrame now={snapshot.now} onBack={goAttract} title="受付が完了しました">
       <PassCard visit={screen.visit} host={host} />
       <p className="mt-6 text-sm leading-relaxed text-muted-foreground sm:text-base">
         {deliveryDone
           ? `${host ? `${host.name}（内線 ${host.extension}）` : "担当者"}へ配達をお知らせしました。お荷物は受付カウンターへお渡しください。`
-          : interviewDone
-            ? `${who}へ面接の到着をお知らせしました。ロビーで少々お待ちください。`
-            : `${who}へ来客をお知らせしました。ロビーで少々お待ちください。`}
+          : workDone
+            ? `${who}へ工事の到着をお知らせしました。受付で入館のご案内をお受けください。`
+            : interviewDone
+              ? `${who}へ面接の到着をお知らせしました。ロビーで少々お待ちください。`
+              : `${who}へ来客をお知らせしました。ロビーで少々お待ちください。`}
       </p>
       <Button
         type="button"
         variant="outline"
         className="mt-6 h-12 rounded-2xl"
-        onClick={goHome}
+        onClick={goAttract}
       >
-        トップへ戻る（{secondsLeft}秒）
+        最初の画面へ戻る（{secondsLeft}秒）
       </Button>
     </LobbyFrame>
   );

@@ -11,6 +11,7 @@ import type {
   Visit,
   VisitStatus,
   WalkInInput,
+  WorkInput,
 } from "@/lib/types";
 import { VISIT_STATUSES } from "@/lib/types";
 import { sortVisits } from "@/lib/visits";
@@ -265,6 +266,40 @@ export function createDelivery(
     visit.purposeNote = note;
     visit.hostId = input.hostId;
     visit.carrier = carrierName;
+    db.visits.push(visit);
+    try {
+      save(db);
+    } catch {
+      memory = db;
+    }
+    return { snapshot: toSnapshot(db), visit: { ...visit } };
+  });
+}
+
+export function createWork(
+  input: WorkInput,
+): Promise<{ snapshot: Snapshot; visit: Visit } | { message: string }> {
+  return withLock(() => {
+    const name = clean(input.visitorName, 40);
+    const company = clean(input.visitorCompany, 60);
+    const note = clean(input.purposeNote, 120);
+    const size = partySize(input.partySize);
+    if (!company) return { message: "会社名を入力してください。" };
+    if (!name) return { message: "お名前を入力してください。" };
+    if (!note) return { message: "作業内容を入力してください。" };
+    if (!size) return { message: "人数は1〜20名で指定してください。" };
+    const db = load();
+    if (!requireHost(db.hosts, input.hostId)) {
+      return { message: "担当者を選択してください。" };
+    }
+    const now = new Date();
+    const visit = blankVisit(db, now);
+    visit.visitorName = name;
+    visit.visitorCompany = company;
+    visit.partySize = size;
+    visit.purpose = "work";
+    visit.purposeNote = note;
+    visit.hostId = input.hostId;
     db.visits.push(visit);
     try {
       save(db);

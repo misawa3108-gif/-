@@ -20,7 +20,7 @@ const mincho = Shippori_Mincho({
 export const metadata: Metadata = {
   title: "株式会社ライトパス 来客受付",
   description:
-    "本社1階の来客受付。来客、面接、配送関係に分けて受付し、受付デスクでご案内を記録します。",
+    "本社1階の来客受付。画面にタッチして、来客・面接・配送と工事から受付を始めます。",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

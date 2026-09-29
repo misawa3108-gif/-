@@ -137,3 +137,21 @@
     background: oklch(0.86 0.04 165);
   }
 }
+
+@keyframes reception-pulse {
+  0% {
+    transform: scale(0.86);
+    opacity: 0.45;
+  }
+  80% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.reception-pulse {
+  animation: reception-pulse 2.6s ease-out infinite;
+}

@@ -37,7 +37,11 @@ export function matchAppointments(
   const expected = visits.filter((visit) => {
     if (visit.status !== "expected" || !visit.hasAppointment) return false;
     if (lane === "interview") return visit.purpose === "interview";
-    return visit.purpose !== "interview" && visit.purpose !== "delivery";
+    return (
+      visit.purpose !== "interview" &&
+      visit.purpose !== "delivery" &&
+      visit.purpose !== "work"
+    );
   });
   const q = normalizeQuery(query);
   if (!q) return sortVisits(expected);
