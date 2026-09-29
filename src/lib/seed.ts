@@ -1,13 +1,15 @@
-import type { Database, Host, Visit } from "@/lib/types";
+import { noticeBody } from "@/lib/notices";
+import type { Database, Host, Notice, Visit } from "@/lib/types";
 import { shiftIso, tokyoDateKey } from "@/lib/time";
 
-const HOSTS: Host[] = [
+export const HOSTS: Host[] = [
   {
     id: "host-watanabe",
     name: "渡辺 彩",
     department: "総務部",
     title: "受付責任者",
     extension: "1001",
+    mobile: "090-0000-1001",
     floor: "1F",
   },
   {
@@ -16,6 +18,7 @@ const HOSTS: Host[] = [
     department: "経営企画部",
     title: "部長",
     extension: "2101",
+    mobile: "090-0000-2101",
     floor: "12F",
   },
   {
@@ -24,6 +27,7 @@ const HOSTS: Host[] = [
     department: "プロダクト開発部",
     title: "マネージャー",
     extension: "2204",
+    mobile: "090-0000-2204",
     floor: "8F",
   },
   {
@@ -32,6 +36,7 @@ const HOSTS: Host[] = [
     department: "人事部",
     title: "採用担当",
     extension: "1502",
+    mobile: "090-0000-1502",
     floor: "5F",
   },
   {
@@ -40,6 +45,7 @@ const HOSTS: Host[] = [
     department: "営業部",
     title: "主任",
     extension: "1808",
+    mobile: "090-0000-1808",
     floor: "7F",
   },
   {
@@ -48,6 +54,7 @@ const HOSTS: Host[] = [
     department: "カスタマーサクセス",
     title: "リーダー",
     extension: "1910",
+    mobile: "090-0000-1910",
     floor: "9F",
   },
   {
@@ -56,6 +63,7 @@ const HOSTS: Host[] = [
     department: "技術本部",
     title: "本部長",
     extension: "3001",
+    mobile: "090-0000-3001",
     floor: "15F",
   },
   {
@@ -64,6 +72,7 @@ const HOSTS: Host[] = [
     department: "法務部",
     title: "マネージャー",
     extension: "1603",
+    mobile: "090-0000-1603",
     floor: "6F",
   },
 ];
@@ -228,9 +237,27 @@ export function seedDatabase(now = new Date()): Database {
     }),
   ];
 
+  const notices: Notice[] = visits.flatMap((item) => {
+    if (!item.notifiedAt || !item.hostId) return [];
+    const host = HOSTS.find((person) => person.id === item.hostId);
+    if (!host) return [];
+    return [
+      {
+        id: `notice-${item.id}`,
+        visitId: item.id,
+        hostId: host.id,
+        phone: host.mobile,
+        body: noticeBody(item, host),
+        sentAt: item.notifiedAt,
+        readAt: item.status === "left" ? item.notifiedAt : null,
+      },
+    ];
+  });
+
   return {
     hosts: HOSTS,
     visits,
+    notices,
     seq: visits.length,
     seqDate: tokyoDateKey(now),
   };

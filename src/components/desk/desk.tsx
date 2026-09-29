@@ -26,6 +26,7 @@ import {
 } from "@/lib/actions";
 import { company } from "@/lib/company";
 import { PURPOSE_LABEL } from "@/lib/labels";
+import { formatMobile } from "@/lib/notices";
 import { formatTokyoTime, minutesSince } from "@/lib/time";
 import type { Snapshot, Visit, VisitStatus } from "@/lib/types";
 import {
@@ -107,7 +108,7 @@ export function Desk({ initial }: { initial: Snapshot }) {
   return (
     <div className="min-h-dvh">
       <header className="border-b bg-card/80">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3">
             <Mark className="size-9" />
             <div>
@@ -119,6 +120,9 @@ export function Desk({ initial }: { initial: Snapshot }) {
           </div>
           <div className="flex items-center gap-3 sm:gap-5">
             <Clock initialIso={snapshot.now} className="hidden sm:block" />
+            <Button asChild variant="outline" className="h-10 rounded-full px-4">
+              <Link href="/phone">担当者の携帯</Link>
+            </Button>
             <Button asChild variant="outline" className="h-10 rounded-full px-4">
               <Link href="/">来客画面</Link>
             </Button>
@@ -204,8 +208,8 @@ export function Desk({ initial }: { initial: Snapshot }) {
                     visit.id,
                     () => notifyAction(visit.id),
                     host
-                      ? `${host.name} へ連絡済みにしました（内線 ${host.extension}）`
-                      : "連絡済みにしました",
+                      ? `${host.name}の携帯へ連絡しました`
+                      : "携帯へ連絡しました",
                   );
                 }}
               />
@@ -343,16 +347,18 @@ function VisitCard({
               : "担当者未設定"}
           </p>
           <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            {hostName ? (
+            {hostName?.mobile ? (
               <span className="inline-flex items-center gap-1">
                 <Phone className="size-3.5" />
-                内線 {hostName.extension}
+                {formatMobile(hostName.mobile)}
               </span>
-            ) : null}
+            ) : (
+              <span>携帯未登録</span>
+            )}
             {visit.notifiedAt ? (
               <span className="inline-flex items-center gap-1">
                 <Bell className="size-3.5" />
-                {formatTokyoTime(visit.notifiedAt)} 連絡済み
+                {formatTokyoTime(visit.notifiedAt)} 携帯へ送信済み
               </span>
             ) : (
               <span>未連絡</span>
@@ -403,10 +409,10 @@ function VisitCard({
               type="button"
               variant="outline"
               className="h-10 rounded-full px-4"
-              disabled={busy || !visit.hostId}
+              disabled={busy || !visit.hostId || !hostName?.mobile}
               onClick={onNotify}
             >
-              連絡済みにする
+              {visit.notifiedAt ? "携帯へ再連絡" : "携帯へ連絡"}
             </Button>
           ) : null}
           {visit.status === "expected" || visit.status === "waiting" ? (

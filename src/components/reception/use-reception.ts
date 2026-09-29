@@ -23,7 +23,7 @@ export function useReception(initial: Snapshot) {
   useEffect(() => {
     const id = setInterval(() => {
       void refresh().catch(() => undefined);
-    }, 5000);
+    }, 2500);
     return () => clearInterval(id);
   }, [refresh]);
 

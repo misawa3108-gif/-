@@ -3,8 +3,11 @@
 import {
   checkInAppointment,
   createDelivery,
+  createGuest,
+  createInterview,
   createWalkIn,
   createWork,
+  markNoticesRead,
   notifyHost,
   readSnapshot,
   resetDemo,
@@ -13,6 +16,8 @@ import {
 import type {
   ActionResult,
   DeliveryInput,
+  GuestInput,
+  InterviewInput,
   Snapshot,
   Visit,
   VisitStatus,
@@ -39,6 +44,16 @@ export async function walkInAction(input: WalkInInput): Promise<ActionResult> {
   return asResult(await createWalkIn(input));
 }
 
+export async function guestAction(input: GuestInput): Promise<ActionResult> {
+  return asResult(await createGuest(input));
+}
+
+export async function interviewAction(
+  input: InterviewInput,
+): Promise<ActionResult> {
+  return asResult(await createInterview(input));
+}
+
 export async function deliveryAction(input: DeliveryInput): Promise<ActionResult> {
   return asResult(await createDelivery(input));
 }
@@ -60,4 +75,8 @@ export async function notifyAction(visitId: string): Promise<ActionResult> {
 
 export async function resetDemoAction(): Promise<Snapshot> {
   return resetDemo();
+}
+
+export async function markReadAction(hostId: string): Promise<Snapshot> {
+  return markNoticesRead(hostId);
 }

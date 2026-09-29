@@ -1,7 +1,7 @@
 import type { Purpose, VisitStatus } from "@/lib/types";
 
 export const PURPOSE_LABEL: Record<Purpose, string> = {
-  meeting: "打ち合わせ",
+  meeting: "来客",
   interview: "面接",
   sales: "ご提案・挨拶",
   delivery: "お荷物・配達",

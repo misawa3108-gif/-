@@ -25,7 +25,18 @@ export type Host = {
   department: string;
   title: string;
   extension: string;
+  mobile: string;
   floor: string;
+};
+
+export type Notice = {
+  id: string;
+  visitId: string;
+  hostId: string;
+  phone: string;
+  body: string;
+  sentAt: string;
+  readAt: string | null;
 };
 
 export type Visit = {
@@ -51,6 +62,7 @@ export type Visit = {
 export type Snapshot = {
   hosts: Host[];
   visits: Visit[];
+  notices: Notice[];
   now: string;
 };
 
@@ -84,9 +96,20 @@ export type WorkInput = {
   hostId: string;
 };
 
+export type GuestInput = {
+  visitorName: string;
+  visitorCompany: string;
+  hostId: string;
+};
+
+export type InterviewInput = {
+  visitorName: string;
+};
+
 export type Database = {
   hosts: Host[];
   visits: Visit[];
+  notices: Notice[];
   seq: number;
   seqDate: string;
 };

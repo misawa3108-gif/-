@@ -2,14 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
-import {
-  Briefcase,
-  ChevronRight,
-  HardHat,
-  Search,
-  Truck,
-  UserRound,
-} from "lucide-react";
+import { Briefcase, HardHat, Truck, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,42 +14,38 @@ import { LobbyFrame } from "@/components/lobby/frame";
 import { PassCard } from "@/components/lobby/pass-card";
 import { useReception } from "@/components/reception/use-reception";
 import {
-  checkInAction,
   deliveryAction,
-  walkInAction,
+  guestAction,
+  interviewAction,
   workAction,
 } from "@/lib/actions";
-import { company } from "@/lib/company";
-import { CARRIERS, PURPOSE_LABEL, VISITOR_PURPOSES } from "@/lib/labels";
-import { formatTokyoTime, greeting } from "@/lib/time";
-import type { Purpose, Snapshot, Visit } from "@/lib/types";
-import {
-  findHost,
-  matchAppointments,
-  normalizeQuery,
-  partyPhrase,
-  type AppointmentLane,
-} from "@/lib/visits";
+import { INTERVIEW_HOST_ID, company } from "@/lib/company";
+import { CARRIERS } from "@/lib/labels";
+import { greeting } from "@/lib/time";
+import type { Snapshot, Visit } from "@/lib/types";
+import { findHost } from "@/lib/visits";
 import { cn } from "@/lib/utils";
 
 type Screen =
   | { name: "attract" }
   | { name: "home" }
-  | { name: "appointment"; lane: AppointmentLane }
-  | { name: "appointment-confirm"; visitId: string; lane: AppointmentLane }
-  | { name: "walkin"; lane: AppointmentLane; step: 0 | 1 | 2 | 3 }
+  | { name: "guest" }
+  | { name: "guest-confirm" }
+  | { name: "interview" }
+  | { name: "interview-confirm" }
   | { name: "service" }
   | { name: "delivery"; step: 0 | 1 | 2 }
   | { name: "work"; step: 0 | 1 }
   | { name: "done"; visit: Visit };
 
-type WalkInDraft = {
-  purpose: Purpose;
-  hostId: string;
-  visitorName: string;
+type GuestDraft = {
   visitorCompany: string;
-  partySize: number;
-  purposeNote: string;
+  visitorName: string;
+  hostId: string;
+};
+
+type InterviewDraft = {
+  visitorName: string;
 };
 
 type DeliveryDraft = {
@@ -76,19 +65,18 @@ type WorkDraft = {
   purposeNote: string;
 };
 
-const WALK_STEPS = ["ご用件", "担当者", "お客様情報", "確認"];
-const INTERVIEW_STEPS = ["面接官", "お名前", "確認"];
 const DELIVERY_STEPS = ["配送会社", "お荷物", "確認"];
 const WORK_STEPS = ["作業内容", "確認"];
 const IDLE_MS = 90_000;
 
-const emptyWalkIn = (): WalkInDraft => ({
-  purpose: "meeting",
-  hostId: "",
-  visitorName: "",
+const emptyGuest = (): GuestDraft => ({
   visitorCompany: "",
-  partySize: 1,
-  purposeNote: "",
+  visitorName: "",
+  hostId: "",
+});
+
+const emptyInterview = (): InterviewDraft => ({
+  visitorName: "",
 });
 
 const emptyDelivery = (): DeliveryDraft => ({
@@ -111,8 +99,8 @@ const emptyWork = (): WorkDraft => ({
 export function Kiosk({ initial }: { initial: Snapshot }) {
   const { snapshot, replace } = useReception(initial);
   const [screen, setScreen] = useState<Screen>({ name: "attract" });
-  const [query, setQuery] = useState("");
-  const [walkIn, setWalkIn] = useState<WalkInDraft>(emptyWalkIn);
+  const [guest, setGuest] = useState<GuestDraft>(emptyGuest);
+  const [interview, setInterview] = useState<InterviewDraft>(emptyInterview);
   const [delivery, setDelivery] = useState<DeliveryDraft>(emptyDelivery);
   const [work, setWork] = useState<WorkDraft>(emptyWork);
   const [error, setError] = useState("");
@@ -122,9 +110,9 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
 
   const goAttract = useCallback(() => {
     setError("");
-    setQuery("");
     setReturnAt(null);
-    setWalkIn(emptyWalkIn());
+    setGuest(emptyGuest());
+    setInterview(emptyInterview());
     setDelivery(emptyDelivery());
     setWork(emptyWork());
     setScreen({ name: "attract" });
@@ -142,7 +130,6 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
 
   function goHome() {
     setError("");
-    setQuery("");
     setReturnAt(null);
     setScreen({ name: "home" });
   }
@@ -153,26 +140,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
       goAttract();
     }, IDLE_MS);
     return () => window.clearTimeout(id);
-  }, [screen, query, walkIn, delivery, work, pending, goAttract]);
-
-  function openLane(lane: AppointmentLane) {
-    setError("");
-    setQuery("");
-    setScreen({ name: "appointment", lane });
-  }
-
-  function startWalkIn(lane: AppointmentLane) {
-    setError("");
-    setWalkIn({
-      ...emptyWalkIn(),
-      purpose: lane === "interview" ? "interview" : "meeting",
-    });
-    setScreen({
-      name: "walkin",
-      lane,
-      step: lane === "interview" ? 1 : 0,
-    });
-  }
+  }, [screen, guest, interview, delivery, work, pending, goAttract]);
 
   function complete(visit: Visit) {
     setSecondsLeft(24);
@@ -186,25 +154,20 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
       goAttract();
       return;
     }
-    if (screen.name === "appointment") {
+    if (screen.name === "guest") {
       goHome();
       return;
     }
-    if (screen.name === "appointment-confirm") {
-      setScreen({ name: "appointment", lane: screen.lane });
+    if (screen.name === "guest-confirm") {
+      setScreen({ name: "guest" });
       return;
     }
-    if (screen.name === "walkin") {
-      const first = screen.lane === "interview" ? 1 : 0;
-      if (screen.step <= first) {
-        setScreen({ name: "appointment", lane: screen.lane });
-        return;
-      }
-      setScreen({
-        name: "walkin",
-        lane: screen.lane,
-        step: (screen.step - 1) as 0 | 1 | 2,
-      });
+    if (screen.name === "interview") {
+      goHome();
+      return;
+    }
+    if (screen.name === "interview-confirm") {
+      setScreen({ name: "interview" });
       return;
     }
     if (screen.name === "service") {
@@ -222,12 +185,6 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
     }
   }
 
-  const matches =
-    screen.name === "appointment"
-      ? matchAppointments(snapshot.visits, query, screen.lane)
-      : [];
-  const typed = normalizeQuery(query).length > 0;
-
   if (screen.name === "attract") {
     return <AttractScreen now={snapshot.now} onStart={() => setScreen({ name: "home" })} />;
   }
@@ -243,21 +200,29 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
             ご用件をお選びください
           </h1>
           <p className="mt-5 max-w-lg text-sm leading-relaxed text-muted-foreground sm:text-base">
-            あてはまる受付をタッチしてください。受付番号をお渡しし、担当者へお知らせします。
+            あてはまる受付をタッチしてください。記入が終わると、担当者の携帯へ連絡します。
           </p>
 
           <div className="mt-10 grid gap-3 sm:grid-cols-3 sm:gap-4">
             <Choice
               icon={<UserRound />}
               title="来客用"
-              body="打ち合わせ、ご挨拶、その他のご訪問です。"
-              onClick={() => openLane("visitor")}
+              body="会社名、訪問者の名前、アポの相手を記入します。"
+              onClick={() => {
+                setError("");
+                setGuest(emptyGuest());
+                setScreen({ name: "guest" });
+              }}
             />
             <Choice
               icon={<Briefcase />}
               title="面接用"
-              body="採用面接のご予約呼び出しと受付です。"
-              onClick={() => openLane("interview")}
+              body="訪問者の名前だけ記入します。人事担当の携帯へ連絡します。"
+              onClick={() => {
+                setError("");
+                setInterview(emptyInterview());
+                setScreen({ name: "interview" });
+              }}
             />
             <Choice
               icon={<HardHat />}
@@ -278,165 +243,51 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
               <span className="px-1.5">·</span>
               受付 {company.hours}
             </p>
-            <Link
-              href="/desk"
-              className="w-fit text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            >
-              受付スタッフ
-            </Link>
+            <span className="flex gap-4">
+              <Link
+                href="/phone"
+                className="w-fit text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              >
+                担当者の携帯
+              </Link>
+              <Link
+                href="/desk"
+                className="w-fit text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              >
+                受付スタッフ
+              </Link>
+            </span>
           </footer>
         </div>
       </LobbyFrame>
     );
   }
 
-  if (screen.name === "appointment") {
-    const interview = screen.lane === "interview";
+  if (screen.name === "guest" || screen.name === "guest-confirm") {
+    const host = findHost(snapshot.hosts, guest.hostId);
+    const confirming = screen.name === "guest-confirm";
     return (
       <LobbyFrame
         now={snapshot.now}
         onBack={back}
-        title={interview ? "面接のご予約" : "来客のご予約"}
+        title={confirming ? "この内容で連絡します" : "来客の受付"}
         lede={
-          interview
-            ? "予約時のお名前を入力してください。一覧には出さないようにしています。"
-            : "予約時のお名前か会社名を入力してください。一覧には出さないようにしています。"
+          confirming
+            ? "アポの相手の携帯へ、到着の連絡を送ります。"
+            : "会社名、訪問者の名前、誰に対してのアポかを記入してください。"
         }
       >
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            autoFocus
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={interview ? "木村" : "山田、または会社名"}
-            aria-label={interview ? "面接予約を探す" : "来客予約を探す"}
-            className="h-14 rounded-2xl pl-12 text-base md:text-base"
-          />
-        </div>
-        <div className="mt-4">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 rounded-full px-5"
-            onClick={() => startWalkIn(screen.lane)}
-          >
-            {interview ? "予約がない方はこちら" : "予約がない来客の方はこちら"}
-          </Button>
-        </div>
-        <div className="mt-5">
-          {!typed ? (
-            <p className="rounded-2xl border border-dashed px-4 py-12 text-center text-sm text-muted-foreground">
-              {interview
-                ? "面接予約のお名前を入力すると、本日の予定が表示されます。"
-                : "来客予約のお名前を入力すると、本日の予定が表示されます。"}
-            </p>
-          ) : matches.length === 0 ? (
-            <div className="rounded-2xl border border-dashed px-4 py-10 text-center">
-              <p className="text-sm text-muted-foreground">
-                「{query.trim()}」の{interview ? "面接" : "来客"}予約は見当たりません。
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                className="mt-4 h-11 rounded-full px-5"
-                onClick={() => startWalkIn(screen.lane)}
-              >
-                {interview ? "予約なしで面接受付する" : "予約なしで来客受付する"}
-              </Button>
-            </div>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {matches.map((visit) => {
-                const host = findHost(snapshot.hosts, visit.hostId);
-                return (
-                  <li key={visit.id}>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setScreen({
-                          name: "appointment-confirm",
-                          visitId: visit.id,
-                          lane: screen.lane,
-                        })
-                      }
-                      className="flex w-full items-center justify-between gap-3 rounded-2xl border bg-card px-4 py-4 text-left transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                    >
-                      <span>
-                        <span className="block text-lg font-medium">
-                          {visit.visitorName}
-                        </span>
-                        <span className="mt-1 block text-sm text-muted-foreground">
-                          {visit.visitorCompany || "個人"}
-                          <span className="px-1.5">·</span>
-                          {host ? host.name : "担当未定"}
-                          <span className="px-1.5">·</span>
-                          {visit.scheduledAt
-                            ? formatTokyoTime(visit.scheduledAt)
-                            : "時間未定"}
-                        </span>
-                      </span>
-                      <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      </LobbyFrame>
-    );
-  }
-
-  if (screen.name === "appointment-confirm") {
-    const visit = snapshot.visits.find((item) => item.id === screen.visitId);
-    const host = visit ? findHost(snapshot.hosts, visit.hostId) : null;
-    return (
-      <LobbyFrame
-        now={snapshot.now}
-        onBack={back}
-        title="こちらのご予約ですか"
-        lede={
-          screen.lane === "interview"
-            ? "内容を確認して受付してください。面接官へ到着をお知らせします。"
-            : "内容を確認して受付してください。担当者へ来客をお知らせします。"
-        }
-      >
-        {!visit || visit.status !== "expected" ? (
-          <div className="rounded-2xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-            このご予約はすでに受付済みか、取り消されています。
-            <div>
-              <Button
-                type="button"
-                variant="outline"
-                className="mt-4 h-11 rounded-full px-5"
-                onClick={() =>
-                  setScreen({ name: "appointment", lane: screen.lane })
-                }
-              >
-                検索に戻る
-              </Button>
-            </div>
-          </div>
-        ) : (
+        {confirming ? (
           <>
             <Summary
               rows={[
-                ["お名前", visit.visitorName],
-                ["会社", visit.visitorCompany || "個人"],
-                ["人数", partyPhrase(visit)],
-                ["ご用件", PURPOSE_LABEL[visit.purpose]],
-                ["内容", visit.purposeNote || "—"],
+                ["会社名", guest.visitorCompany.trim()],
+                ["訪問者の名前", guest.visitorName.trim()],
                 [
-                  "予定",
-                  visit.scheduledAt ? formatTokyoTime(visit.scheduledAt) : "—",
+                  "アポの相手",
+                  host ? `${host.name}（${host.department}・${host.floor}）` : "—",
                 ],
-                [
-                  "担当",
-                  host
-                    ? `${host.name}（${host.department}・${host.floor}）`
-                    : "—",
-                ],
+                ["連絡先", host ? `${host.name}の携帯` : "—"],
               ]}
             />
             <Button
@@ -445,217 +296,10 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
               className="mt-6 h-14 w-full rounded-2xl text-base"
               onClick={() => {
                 startTransition(async () => {
-                  const result = await checkInAction(visit.id);
-                  if (!result.ok) {
-                    toast.error(result.message);
-                    return;
-                  }
-                  replace(result.snapshot);
-                  complete(result.visit);
-                });
-              }}
-            >
-              受付する
-            </Button>
-          </>
-        )}
-      </LobbyFrame>
-    );
-  }
-
-  if (screen.name === "walkin") {
-    const host = findHost(snapshot.hosts, walkIn.hostId);
-    const interview = screen.lane === "interview";
-    return (
-      <LobbyFrame
-        now={snapshot.now}
-        onBack={back}
-        title={
-          screen.step === 0
-            ? "ご用件を教えてください"
-            : screen.step === 1
-              ? interview
-                ? "面接官を選んでください"
-                : "どちらにご用ですか"
-              : screen.step === 2
-                ? interview
-                  ? "お名前を教えてください"
-                  : "お客様のお名前"
-                : interview
-                  ? "面接の受付内容"
-                  : "受付内容の確認"
-        }
-        lede={
-          screen.step === 3
-            ? interview
-              ? "この内容で面接官へ到着をお知らせします。"
-              : "この内容で担当者へお知らせします。"
-            : undefined
-        }
-        steps={interview ? INTERVIEW_STEPS : WALK_STEPS}
-        stepIndex={interview ? screen.step - 1 : screen.step}
-      >
-        {screen.step === 0 ? (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {VISITOR_PURPOSES.map((purpose) => (
-              <button
-                key={purpose}
-                type="button"
-                aria-pressed={walkIn.purpose === purpose}
-                onClick={() => {
-                  setWalkIn((draft) => ({ ...draft, purpose }));
-                  setScreen({ name: "walkin", lane: screen.lane, step: 1 });
-                }}
-                className={cn(
-                  "rounded-2xl border bg-card px-4 py-5 text-left text-lg transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                  walkIn.purpose === purpose
-                    ? "border-primary bg-accent"
-                    : "border-border",
-                )}
-              >
-                {PURPOSE_LABEL[purpose]}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        {screen.step === 1 ? (
-          <>
-            <HostPicker
-              hosts={snapshot.hosts}
-              value={walkIn.hostId}
-              onChange={(hostId) => setWalkIn((draft) => ({ ...draft, hostId }))}
-            />
-            <NextButton
-              disabled={!walkIn.hostId}
-              onClick={() =>
-                setScreen({ name: "walkin", lane: screen.lane, step: 2 })
-              }
-            />
-          </>
-        ) : null}
-
-        {screen.step === 2 ? (
-          <form
-            className="flex flex-col gap-5"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const name = walkIn.visitorName.trim();
-              if (!name) {
-                setError("お名前を入力してください。");
-                return;
-              }
-              setError("");
-              setScreen({ name: "walkin", lane: screen.lane, step: 3 });
-            }}
-          >
-            <Field label="お名前" htmlFor="visitor-name" required>
-              <Input
-                id="visitor-name"
-                autoFocus
-                value={walkIn.visitorName}
-                onChange={(event) =>
-                  setWalkIn((draft) => ({
-                    ...draft,
-                    visitorName: event.target.value,
-                  }))
-                }
-                placeholder={interview ? "木村 咲" : "山田 太郎"}
-                className="h-14 rounded-2xl text-base md:text-base"
-                maxLength={40}
-              />
-            </Field>
-            <Field
-              label={interview ? "所属" : "会社名"}
-              htmlFor="visitor-company"
-              hint="個人の方は空欄で構いません"
-            >
-              <Input
-                id="visitor-company"
-                value={walkIn.visitorCompany}
-                onChange={(event) =>
-                  setWalkIn((draft) => ({
-                    ...draft,
-                    visitorCompany: event.target.value,
-                  }))
-                }
-                placeholder={interview ? "空欄でも構いません" : "株式会社ノースブリッジ"}
-                className="h-14 rounded-2xl text-base md:text-base"
-                maxLength={60}
-              />
-            </Field>
-            <Field label="人数">
-              <CountStepper
-                value={walkIn.partySize}
-                min={1}
-                max={20}
-                unit="名"
-                onChange={(partySize) =>
-                  setWalkIn((draft) => ({ ...draft, partySize }))
-                }
-              />
-            </Field>
-            <Field label="ひとこと" htmlFor="visitor-note" hint="任意">
-              <Textarea
-                id="visitor-note"
-                value={walkIn.purposeNote}
-                onChange={(event) =>
-                  setWalkIn((draft) => ({
-                    ...draft,
-                    purposeNote: event.target.value,
-                  }))
-                }
-                placeholder={
-                  interview ? "プロダクトデザイナー一次面接" : "四半期の進捗確認"
-                }
-                maxLength={120}
-                className="min-h-24 rounded-2xl text-base md:text-base"
-              />
-            </Field>
-            {error ? (
-              <p className="text-sm text-destructive" role="alert">
-                {error}
-              </p>
-            ) : null}
-            <Button type="submit" className="h-14 rounded-2xl text-base">
-              確認へ進む
-            </Button>
-          </form>
-        ) : null}
-
-        {screen.step === 3 ? (
-          <>
-            <Summary
-              rows={[
-                ["お名前", walkIn.visitorName.trim()],
-                [
-                  interview ? "所属" : "会社",
-                  walkIn.visitorCompany.trim() || "個人",
-                ],
-                ["人数", `${walkIn.partySize}名`],
-                ["ご用件", PURPOSE_LABEL[walkIn.purpose]],
-                ["内容", walkIn.purposeNote.trim() || "—"],
-                [
-                  "担当",
-                  host
-                    ? `${host.name}（${host.department}・${host.floor}）`
-                    : "—",
-                ],
-              ]}
-            />
-            <Button
-              type="button"
-              disabled={pending}
-              className="mt-6 h-14 w-full rounded-2xl text-base"
-              onClick={() => {
-                startTransition(async () => {
-                  const result = await walkInAction({
-                    visitorName: walkIn.visitorName,
-                    visitorCompany: walkIn.visitorCompany,
-                    partySize: walkIn.partySize,
-                    purpose: walkIn.purpose,
-                    purposeNote: walkIn.purposeNote,
-                    hostId: walkIn.hostId,
+                  const result = await guestAction({
+                    visitorCompany: guest.visitorCompany,
+                    visitorName: guest.visitorName,
+                    hostId: guest.hostId,
                   });
                   if (!result.ok) {
                     toast.error(result.message);
@@ -666,10 +310,174 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
                 });
               }}
             >
-              この内容で受付する
+              {pending ? "連絡しています…" : "携帯へ連絡する"}
             </Button>
           </>
-        ) : null}
+        ) : (
+          <form
+            className="flex flex-col gap-5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!guest.visitorCompany.trim()) {
+                setError("会社名を入力してください。");
+                return;
+              }
+              if (!guest.visitorName.trim()) {
+                setError("訪問者の名前を入力してください。");
+                return;
+              }
+              if (!guest.hostId) {
+                setError("誰に対してのアポかを選んでください。");
+                return;
+              }
+              setError("");
+              setScreen({ name: "guest-confirm" });
+            }}
+          >
+            <Field label="会社名" htmlFor="guest-company" required>
+              <Input
+                id="guest-company"
+                autoFocus
+                value={guest.visitorCompany}
+                onChange={(event) =>
+                  setGuest((draft) => ({
+                    ...draft,
+                    visitorCompany: event.target.value,
+                  }))
+                }
+                placeholder="株式会社ノースブリッジ"
+                className="h-14 rounded-2xl text-base md:text-base"
+                maxLength={60}
+              />
+            </Field>
+            <Field label="訪問者の名前" htmlFor="guest-name" required>
+              <Input
+                id="guest-name"
+                value={guest.visitorName}
+                onChange={(event) =>
+                  setGuest((draft) => ({
+                    ...draft,
+                    visitorName: event.target.value,
+                  }))
+                }
+                placeholder="山田 太郎"
+                className="h-14 rounded-2xl text-base md:text-base"
+                maxLength={40}
+              />
+            </Field>
+            <Field label="誰に対してのアポか" required>
+              <HostPicker
+                hosts={snapshot.hosts}
+                value={guest.hostId}
+                onChange={(hostId) => setGuest((draft) => ({ ...draft, hostId }))}
+              />
+            </Field>
+            {error ? (
+              <p className="text-sm text-destructive" role="alert">
+                {error}
+              </p>
+            ) : null}
+            <Button type="submit" className="h-14 rounded-2xl text-base">
+              内容を確認する
+            </Button>
+          </form>
+        )}
+      </LobbyFrame>
+    );
+  }
+
+  if (screen.name === "interview" || screen.name === "interview-confirm") {
+    const interviewer = findHost(snapshot.hosts, INTERVIEW_HOST_ID);
+    const confirming = screen.name === "interview-confirm";
+    return (
+      <LobbyFrame
+        now={snapshot.now}
+        onBack={back}
+        title={confirming ? "このお名前で連絡します" : "面接の受付"}
+        lede={
+          confirming
+            ? interviewer
+              ? `${interviewer.department} ${interviewer.name}の携帯へ、到着の連絡を送ります。`
+              : "面接担当者の携帯へ連絡します。"
+            : "訪問者の名前だけ記入してください。人事担当の携帯へ連絡します。"
+        }
+      >
+        {!interviewer ? (
+          <div className="rounded-2xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+            面接担当者の携帯が登録されていません。受付カウンターへお声がけください。
+          </div>
+        ) : confirming ? (
+          <>
+            <Summary
+              rows={[
+                ["訪問者の名前", interview.visitorName.trim()],
+                [
+                  "連絡先",
+                  `${interviewer.department} ${interviewer.name}の携帯`,
+                ],
+              ]}
+            />
+            <Button
+              type="button"
+              disabled={pending}
+              className="mt-6 h-14 w-full rounded-2xl text-base"
+              onClick={() => {
+                startTransition(async () => {
+                  const result = await interviewAction({
+                    visitorName: interview.visitorName,
+                  });
+                  if (!result.ok) {
+                    toast.error(result.message);
+                    return;
+                  }
+                  replace(result.snapshot);
+                  complete(result.visit);
+                });
+              }}
+            >
+              {pending ? "連絡しています…" : "携帯へ連絡する"}
+            </Button>
+          </>
+        ) : (
+          <form
+            className="flex flex-col gap-5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!interview.visitorName.trim()) {
+                setError("訪問者の名前を入力してください。");
+                return;
+              }
+              setError("");
+              setScreen({ name: "interview-confirm" });
+            }}
+          >
+            <Field label="訪問者の名前" htmlFor="interview-name" required>
+              <Input
+                id="interview-name"
+                autoFocus
+                value={interview.visitorName}
+                onChange={(event) =>
+                  setInterview({ visitorName: event.target.value })
+                }
+                placeholder="木村 咲"
+                className="h-14 rounded-2xl text-base md:text-base"
+                maxLength={40}
+              />
+            </Field>
+            <p className="rounded-2xl bg-secondary px-4 py-3 text-sm leading-relaxed text-secondary-foreground">
+              送信すると、{interviewer.department} {interviewer.name}
+              の携帯へ連絡します。お名前以外の記入はありません。
+            </p>
+            {error ? (
+              <p className="text-sm text-destructive" role="alert">
+                {error}
+              </p>
+            ) : null}
+            <Button type="submit" className="h-14 rounded-2xl text-base">
+              内容を確認する
+            </Button>
+          </form>
+        )}
       </LobbyFrame>
     );
   }
@@ -696,7 +504,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
           <Choice
             icon={<HardHat />}
             title="工事"
-            body="点検、工事、作業での入館です。担当者へ到着をお知らせします。"
+            body="点検、工事、作業での入館です。担当者の携帯へ連絡します。"
             onClick={() => {
               setWork(emptyWork());
               setError("");
@@ -718,7 +526,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
         lede={
           screen.step === 0
             ? "会社名と作業内容、ご担当者を入力してください。"
-            : "この内容で担当者へ到着をお知らせします。"
+            : "この内容で担当者の携帯へ到着を連絡します。"
         }
         steps={WORK_STEPS}
         stepIndex={screen.step}
@@ -882,7 +690,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
           screen.step === 0
             ? "配送会社を選んでください。"
             : screen.step === 2
-              ? "宛先の担当者へ配達をお知らせします。お荷物は受付カウンターへお渡しください。"
+              ? "宛先の担当者の携帯へ配達を連絡します。お荷物は受付カウンターへお渡しください。"
               : undefined
         }
         steps={DELIVERY_STEPS}
@@ -1017,7 +825,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
                 [
                   "宛先",
                   host
-                    ? `${host.name}（${host.department}・${host.floor}・内線 ${host.extension}）`
+                    ? `${host.name}（${host.department}・${host.floor}）の携帯`
                     : "—",
                 ],
               ]}
@@ -1047,24 +855,31 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
   }
 
   const host = findHost(snapshot.hosts, screen.visit.hostId);
+  const notice = snapshot.notices.find((item) => item.visitId === screen.visit.id);
   const deliveryDone = screen.visit.purpose === "delivery";
   const workDone = screen.visit.purpose === "work";
   const interviewDone = screen.visit.purpose === "interview";
-  const who = host
-    ? `${host.name}（${host.department}・${host.floor}）`
-    : "担当者";
+  const who = host ? `${host.name}さんの携帯` : "担当者の携帯";
   return (
     <LobbyFrame now={snapshot.now} onBack={goAttract} title="受付が完了しました">
       <PassCard visit={screen.visit} host={host} />
       <p className="mt-6 text-sm leading-relaxed text-muted-foreground sm:text-base">
         {deliveryDone
-          ? `${host ? `${host.name}（内線 ${host.extension}）` : "担当者"}へ配達をお知らせしました。お荷物は受付カウンターへお渡しください。`
+          ? `${who}へ配達の連絡を送りました。お荷物は受付カウンターへお渡しください。`
           : workDone
-            ? `${who}へ工事の到着をお知らせしました。受付で入館のご案内をお受けください。`
+            ? `${who}へ工事の到着を連絡しました。受付で入館のご案内をお受けください。`
             : interviewDone
-              ? `${who}へ面接の到着をお知らせしました。ロビーで少々お待ちください。`
-              : `${who}へ来客をお知らせしました。ロビーで少々お待ちください。`}
+              ? `${who}へ面接の到着を連絡しました。ロビーで少々お待ちください。`
+              : `${who}へ来客の到着を連絡しました。ロビーで少々お待ちください。`}
       </p>
+      {notice ? (
+        <div className="mt-4 rounded-3xl bg-secondary px-5 py-4" aria-live="polite">
+          <p className="text-xs tracking-[0.14em] text-muted-foreground">
+            送信した連絡
+          </p>
+          <p className="mt-2 text-sm leading-relaxed">{notice.body}</p>
+        </div>
+      ) : null}
       <Button
         type="button"
         variant="outline"
@@ -1174,25 +989,6 @@ function CountStepper({
         ＋
       </Button>
     </div>
-  );
-}
-
-function NextButton({
-  disabled,
-  onClick,
-}: {
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <Button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className="mt-6 h-14 rounded-2xl text-base"
-    >
-      次へ
-    </Button>
   );
 }
 
