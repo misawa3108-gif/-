@@ -23,7 +23,6 @@ type Screen =
   | { name: "guest" }
   | { name: "guest-confirm" }
   | { name: "interview" }
-  | { name: "interview-confirm" }
   | { name: "service" }
   | { name: "done"; visit: Visit };
 
@@ -113,10 +112,6 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
     }
     if (screen.name === "interview") {
       goHome();
-      return;
-    }
-    if (screen.name === "interview-confirm") {
-      setScreen({ name: "interview" });
       return;
     }
     if (screen.name === "service") {
@@ -315,69 +310,41 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
     );
   }
 
-  if (screen.name === "interview" || screen.name === "interview-confirm") {
+  if (screen.name === "interview") {
     const interviewer = findHost(snapshot.hosts, INTERVIEW_HOST_ID);
-    const confirming = screen.name === "interview-confirm";
     return (
       <LobbyFrame
         now={snapshot.now}
-        onBack={back}
-        title={confirming ? "このお名前で連絡します" : "面接の受付"}
-        lede={
-          confirming
-            ? interviewer
-              ? `${interviewer.department} ${interviewer.name}の携帯へ、到着の連絡を送ります。`
-              : "面接担当者の携帯へ連絡します。"
-            : "訪問者の名前だけ記入してください。人事担当の携帯へ連絡します。"
-        }
+        onBack={pending ? undefined : back}
+        title="面接の受付"
+        lede="訪問者の名前だけ記入してください。人事担当の携帯へ連絡します。"
       >
         {!interviewer ? (
           <div className="rounded-2xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
             面接担当者の携帯が登録されていません。受付カウンターへお声がけください。
           </div>
-        ) : confirming ? (
-          <>
-            <Summary
-              rows={[
-                ["訪問者の名前", interview.visitorName.trim()],
-                [
-                  "連絡先",
-                  `${interviewer.department} ${interviewer.name}の携帯`,
-                ],
-              ]}
-            />
-            <Button
-              type="button"
-              disabled={pending}
-              className="mt-6 h-14 w-full rounded-2xl text-base"
-              onClick={() => {
-                startTransition(async () => {
-                  const result = await interviewAction({
-                    visitorName: interview.visitorName,
-                  });
-                  if (!result.ok) {
-                    toast.error(result.message);
-                    return;
-                  }
-                  replace(result.snapshot);
-                  complete(result.visit);
-                });
-              }}
-            >
-              {pending ? "連絡しています…" : "携帯へ連絡する"}
-            </Button>
-          </>
         ) : (
           <form
             className="flex flex-col gap-5"
             onSubmit={(event) => {
               event.preventDefault();
+              if (pending) return;
               if (!interview.visitorName.trim()) {
                 setError("訪問者の名前を入力してください。");
                 return;
               }
               setError("");
-              setScreen({ name: "interview-confirm" });
+              startTransition(async () => {
+                const result = await interviewAction({
+                  visitorName: interview.visitorName,
+                });
+                if (!result.ok) {
+                  toast.error(result.message);
+                  return;
+                }
+                replace(result.snapshot);
+                complete(result.visit);
+              });
             }}
           >
             <Field label="訪問者の名前" htmlFor="interview-name" required>
@@ -391,6 +358,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
                 placeholder="木村 咲"
                 className="h-14 rounded-2xl text-base md:text-base"
                 maxLength={40}
+                disabled={pending}
               />
             </Field>
             <p className="rounded-2xl bg-secondary px-4 py-3 text-sm leading-relaxed text-secondary-foreground">
@@ -402,8 +370,12 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
                 {error}
               </p>
             ) : null}
-            <Button type="submit" className="h-14 rounded-2xl text-base">
-              内容を確認する
+            <Button
+              type="submit"
+              disabled={pending}
+              className="h-14 rounded-2xl text-base"
+            >
+              {pending ? "送信しています…" : "送信"}
             </Button>
           </form>
         )}
