@@ -1,4 +1,5 @@
 export const INTERVIEW_HOST_ID = "host-suzuki";
+export const SERVICE_HOST_ID = "host-watanabe";
 
 export const company = {
   name: "株式会社ライトパス",

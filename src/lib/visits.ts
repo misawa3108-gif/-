@@ -66,7 +66,19 @@ export function initials(name: string): string {
     .slice(0, 2);
 }
 
+export function organizationLabel(visit: Visit): string {
+  if (!visit.visitorCompany && visit.purpose === "delivery") return "配送";
+  if (!visit.visitorCompany && visit.purpose === "work") return "工事・作業";
+  return visit.visitorCompany || "個人";
+}
+
 export function partyPhrase(visit: Visit): string {
+  if (
+    !visit.visitorCompany &&
+    (visit.purpose === "delivery" || visit.purpose === "work")
+  ) {
+    return "";
+  }
   if (visit.purpose === "delivery") return `${visit.partySize}個`;
   return `${visit.partySize}名`;
 }

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { INTERVIEW_HOST_ID } from "@/lib/company";
+import { INTERVIEW_HOST_ID, SERVICE_HOST_ID } from "@/lib/company";
 import { noticeBody } from "@/lib/notices";
 import { HOSTS, seedDatabase } from "@/lib/seed";
 import { tokyoDateKey } from "@/lib/time";
@@ -424,6 +424,30 @@ export function createInterview(
     visit.visitorName = name;
     visit.purpose = "interview";
     visit.hostId = interviewer.id;
+    db.visits.push(visit);
+    sendNotice(db, visit, now.toISOString());
+    persist(db);
+    return { snapshot: toSnapshot(db), visit: { ...visit } };
+  });
+}
+
+export function createDirectArrival(
+  purpose: "delivery" | "work",
+): Promise<{ snapshot: Snapshot; visit: Visit } | { message: string }> {
+  return withLock(() => {
+    const db = load();
+    const contact = reachableHost(db.hosts, SERVICE_HOST_ID);
+    if (!contact) {
+      return {
+        message:
+          "担当者の携帯が登録されていません。受付カウンターへお声がけください。",
+      };
+    }
+    const now = new Date();
+    const visit = blankVisit(db, now);
+    visit.visitorName = purpose === "delivery" ? "配送" : "工事・作業";
+    visit.purpose = purpose;
+    visit.hostId = contact.id;
     db.visits.push(visit);
     sendNotice(db, visit, now.toISOString());
     persist(db);

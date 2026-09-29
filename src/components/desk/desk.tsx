@@ -33,6 +33,7 @@ import {
   findHost,
   isLate,
   normalizeQuery,
+  organizationLabel,
   partyPhrase,
 } from "@/lib/visits";
 import { cn } from "@/lib/utils";
@@ -326,11 +327,17 @@ function VisitCard({
           </div>
           <p className="mt-2 text-xl font-medium">{visit.visitorName}</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {visit.visitorCompany || "個人"}
-            <span className="px-1.5">·</span>
-            {PURPOSE_LABEL[visit.purpose]}
-            <span className="px-1.5">·</span>
-            {partyPhrase(visit)}
+            {[
+              organizationLabel(visit) === visit.visitorName
+                ? null
+                : organizationLabel(visit),
+              partyPhrase(visit) || null,
+              PURPOSE_LABEL[visit.purpose] === visit.visitorName
+                ? null
+                : PURPOSE_LABEL[visit.purpose],
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </p>
         </div>
         <div className="text-left sm:text-right">

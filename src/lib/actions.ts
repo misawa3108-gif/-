@@ -3,6 +3,7 @@
 import {
   checkInAppointment,
   createDelivery,
+  createDirectArrival,
   createGuest,
   createInterview,
   createWalkIn,
@@ -60,6 +61,12 @@ export async function deliveryAction(input: DeliveryInput): Promise<ActionResult
 
 export async function workAction(input: WorkInput): Promise<ActionResult> {
   return asResult(await createWork(input));
+}
+
+export async function directArrivalAction(
+  purpose: "delivery" | "work",
+): Promise<ActionResult> {
+  return asResult(await createDirectArrival(purpose));
 }
 
 export async function statusAction(

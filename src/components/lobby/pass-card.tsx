@@ -2,10 +2,19 @@ import { company } from "@/lib/company";
 import { PURPOSE_LABEL } from "@/lib/labels";
 import { formatTokyoTime } from "@/lib/time";
 import type { Host, Visit } from "@/lib/types";
-import { partyPhrase } from "@/lib/visits";
+import { organizationLabel, partyPhrase } from "@/lib/visits";
 
 export function PassCard({ visit, host }: { visit: Visit; host: Host | null }) {
   const when = visit.checkedInAt ?? visit.createdAt;
+  const detail = [
+    organizationLabel(visit) === visit.visitorName ? null : organizationLabel(visit),
+    partyPhrase(visit) || null,
+    PURPOSE_LABEL[visit.purpose] === visit.visitorName
+      ? null
+      : PURPOSE_LABEL[visit.purpose],
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <article className="overflow-hidden rounded-3xl border bg-card shadow-[0_18px_50px_-28px_oklch(0.35_0.04_168)]">
       <div className="flex">
@@ -27,13 +36,9 @@ export function PassCard({ visit, host }: { visit: Visit; host: Host | null }) {
           </p>
           <div className="mt-6 border-t border-dashed pt-4">
             <p className="text-xl font-medium">{visit.visitorName}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {visit.visitorCompany || "個人"}
-              <span className="px-1.5">·</span>
-              {partyPhrase(visit)}
-              <span className="px-1.5">·</span>
-              {PURPOSE_LABEL[visit.purpose]}
-            </p>
+            {detail ? (
+              <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
+            ) : null}
             <p className="mt-3 text-sm">
               {host
                 ? `${host.department}　${host.name}　${host.floor}`

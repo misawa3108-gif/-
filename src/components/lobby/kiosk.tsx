@@ -6,24 +6,16 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { AttractScreen } from "@/components/lobby/attract";
 import { HostPicker } from "@/components/lobby/host-picker";
 import { LobbyFrame } from "@/components/lobby/frame";
 import { PassCard } from "@/components/lobby/pass-card";
 import { useReception } from "@/components/reception/use-reception";
-import {
-  deliveryAction,
-  guestAction,
-  interviewAction,
-  workAction,
-} from "@/lib/actions";
-import { INTERVIEW_HOST_ID } from "@/lib/company";
-import { CARRIERS } from "@/lib/labels";
+import { directArrivalAction, guestAction, interviewAction } from "@/lib/actions";
+import { INTERVIEW_HOST_ID, SERVICE_HOST_ID } from "@/lib/company";
 import { greeting } from "@/lib/time";
 import type { Snapshot, Visit } from "@/lib/types";
 import { findHost } from "@/lib/visits";
-import { cn } from "@/lib/utils";
 
 type Screen =
   | { name: "attract" }
@@ -33,8 +25,6 @@ type Screen =
   | { name: "interview" }
   | { name: "interview-confirm" }
   | { name: "service" }
-  | { name: "delivery"; step: 0 | 1 | 2 }
-  | { name: "work"; step: 0 | 1 }
   | { name: "done"; visit: Visit };
 
 type GuestDraft = {
@@ -47,25 +37,6 @@ type InterviewDraft = {
   visitorName: string;
 };
 
-type DeliveryDraft = {
-  carrier: string;
-  customCarrier: string;
-  driverName: string;
-  parcelCount: number;
-  hostId: string;
-  purposeNote: string;
-};
-
-type WorkDraft = {
-  visitorName: string;
-  visitorCompany: string;
-  partySize: number;
-  hostId: string;
-  purposeNote: string;
-};
-
-const DELIVERY_STEPS = ["配送会社", "お荷物", "確認"];
-const WORK_STEPS = ["作業内容", "確認"];
 const IDLE_MS = 90_000;
 
 const emptyGuest = (): GuestDraft => ({
@@ -78,30 +49,11 @@ const emptyInterview = (): InterviewDraft => ({
   visitorName: "",
 });
 
-const emptyDelivery = (): DeliveryDraft => ({
-  carrier: "",
-  customCarrier: "",
-  driverName: "",
-  parcelCount: 1,
-  hostId: "",
-  purposeNote: "",
-});
-
-const emptyWork = (): WorkDraft => ({
-  visitorName: "",
-  visitorCompany: "",
-  partySize: 1,
-  hostId: "",
-  purposeNote: "",
-});
-
 export function Kiosk({ initial }: { initial: Snapshot }) {
   const { snapshot, replace } = useReception(initial);
   const [screen, setScreen] = useState<Screen>({ name: "attract" });
   const [guest, setGuest] = useState<GuestDraft>(emptyGuest);
   const [interview, setInterview] = useState<InterviewDraft>(emptyInterview);
-  const [delivery, setDelivery] = useState<DeliveryDraft>(emptyDelivery);
-  const [work, setWork] = useState<WorkDraft>(emptyWork);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const [secondsLeft, setSecondsLeft] = useState(24);
@@ -112,8 +64,6 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
     setReturnAt(null);
     setGuest(emptyGuest());
     setInterview(emptyInterview());
-    setDelivery(emptyDelivery());
-    setWork(emptyWork());
     setScreen({ name: "attract" });
   }, []);
 
@@ -139,7 +89,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
       goAttract();
     }, IDLE_MS);
     return () => window.clearTimeout(id);
-  }, [screen, guest, interview, delivery, work, pending, goAttract]);
+  }, [screen, guest, interview, pending, goAttract]);
 
   function complete(visit: Visit) {
     setSecondsLeft(24);
@@ -171,17 +121,21 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
     }
     if (screen.name === "service") {
       goHome();
-      return;
     }
-    if (screen.name === "delivery") {
-      if (screen.step === 0) setScreen({ name: "service" });
-      else setScreen({ name: "delivery", step: (screen.step - 1) as 0 | 1 });
-      return;
-    }
-    if (screen.name === "work") {
-      if (screen.step === 0) setScreen({ name: "service" });
-      else setScreen({ name: "work", step: 0 });
-    }
+  }
+
+  function arrive(purpose: "delivery" | "work") {
+    if (pending) return;
+    setError("");
+    startTransition(async () => {
+      const result = await directArrivalAction(purpose);
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
+      }
+      replace(result.snapshot);
+      complete(result.visit);
+    });
   }
 
   if (screen.name === "attract") {
@@ -226,10 +180,8 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
             <Choice
               icon={<HardHat />}
               title="配送・工事用"
-              body="宅配のお荷物、または工事・作業での入館です。"
+              body="配送か工事・作業を選ぶと、担当者の携帯へ直接連絡します。"
               onClick={() => {
-                setDelivery(emptyDelivery());
-                setWork(emptyWork());
                 setError("");
                 setScreen({ name: "service" });
               }}
@@ -460,373 +412,42 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
   }
 
   if (screen.name === "service") {
+    const contact = findHost(snapshot.hosts, SERVICE_HOST_ID);
     return (
       <LobbyFrame
         now={snapshot.now}
-        onBack={back}
+        onBack={pending ? undefined : back}
         title="配送・工事"
-        lede="あてはまる方をタッチしてください。"
-      >
-        <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
-          <Choice
-            icon={<Truck />}
-            title="配送"
-            body="宅配やお荷物の受け渡しです。受付カウンターへお渡しください。"
-            onClick={() => {
-              setDelivery(emptyDelivery());
-              setError("");
-              setScreen({ name: "delivery", step: 0 });
-            }}
-          />
-          <Choice
-            icon={<HardHat />}
-            title="工事"
-            body="点検、工事、作業での入館です。担当者の携帯へ連絡します。"
-            onClick={() => {
-              setWork(emptyWork());
-              setError("");
-              setScreen({ name: "work", step: 0 });
-            }}
-          />
-        </div>
-      </LobbyFrame>
-    );
-  }
-
-  if (screen.name === "work") {
-    const host = findHost(snapshot.hosts, work.hostId);
-    return (
-      <LobbyFrame
-        now={snapshot.now}
-        onBack={back}
-        title={screen.step === 0 ? "工事・作業の受付" : "作業の確認"}
         lede={
-          screen.step === 0
-            ? "会社名と作業内容、ご担当者を入力してください。"
-            : "この内容で担当者の携帯へ到着を連絡します。"
+          pending
+            ? "担当者の携帯へ連絡しています…"
+            : contact
+              ? `選ぶと、${contact.department} ${contact.name}の携帯へすぐに連絡します。`
+              : "担当者の携帯が登録されていません。"
         }
-        steps={WORK_STEPS}
-        stepIndex={screen.step}
       >
-        {screen.step === 0 ? (
-          <form
-            className="flex flex-col gap-5"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!work.visitorCompany.trim()) {
-                setError("会社名を入力してください。");
-                return;
-              }
-              if (!work.visitorName.trim()) {
-                setError("お名前を入力してください。");
-                return;
-              }
-              if (!work.purposeNote.trim()) {
-                setError("作業内容を入力してください。");
-                return;
-              }
-              if (!work.hostId) {
-                setError("担当者を選択してください。");
-                return;
-              }
-              setError("");
-              setScreen({ name: "work", step: 1 });
-            }}
-          >
-            <Field label="会社名" htmlFor="work-company" required>
-              <Input
-                id="work-company"
-                autoFocus
-                value={work.visitorCompany}
-                onChange={(event) =>
-                  setWork((draft) => ({
-                    ...draft,
-                    visitorCompany: event.target.value,
-                  }))
-                }
-                placeholder="港設備工業"
-                className="h-14 rounded-2xl text-base md:text-base"
-                maxLength={60}
-              />
-            </Field>
-            <Field label="お名前" htmlFor="work-name" required>
-              <Input
-                id="work-name"
-                value={work.visitorName}
-                onChange={(event) =>
-                  setWork((draft) => ({
-                    ...draft,
-                    visitorName: event.target.value,
-                  }))
-                }
-                placeholder="青木 剛"
-                className="h-14 rounded-2xl text-base md:text-base"
-                maxLength={40}
-              />
-            </Field>
-            <Field label="人数">
-              <CountStepper
-                value={work.partySize}
-                min={1}
-                max={20}
-                unit="名"
-                onChange={(partySize) =>
-                  setWork((draft) => ({ ...draft, partySize }))
-                }
-              />
-            </Field>
-            <Field label="作業内容" htmlFor="work-note" required>
-              <Textarea
-                id="work-note"
-                value={work.purposeNote}
-                onChange={(event) =>
-                  setWork((draft) => ({
-                    ...draft,
-                    purposeNote: event.target.value,
-                  }))
-                }
-                placeholder="8F 空調の定期点検"
-                maxLength={120}
-                className="min-h-24 rounded-2xl text-base md:text-base"
-              />
-            </Field>
-            <Field label="ご担当">
-              <HostPicker
-                hosts={snapshot.hosts}
-                value={work.hostId}
-                onChange={(hostId) => setWork((draft) => ({ ...draft, hostId }))}
-              />
-            </Field>
-            {error ? (
-              <p className="text-sm text-destructive" role="alert">
-                {error}
-              </p>
-            ) : null}
-            <Button type="submit" className="h-14 rounded-2xl text-base">
-              確認へ進む
-            </Button>
-          </form>
-        ) : (
-          <>
-            <Summary
-              rows={[
-                ["会社", work.visitorCompany.trim()],
-                ["お名前", work.visitorName.trim()],
-                ["人数", `${work.partySize}名`],
-                ["作業内容", work.purposeNote.trim()],
-                [
-                  "担当",
-                  host
-                    ? `${host.name}（${host.department}・${host.floor}）`
-                    : "—",
-                ],
-              ]}
-            />
-            <Button
-              type="button"
-              disabled={pending}
-              className="mt-6 h-14 w-full rounded-2xl text-base"
-              onClick={() => {
-                startTransition(async () => {
-                  const result = await workAction(work);
-                  if (!result.ok) {
-                    toast.error(result.message);
-                    return;
-                  }
-                  replace(result.snapshot);
-                  complete(result.visit);
-                });
-              }}
-            >
-              この内容で受付する
-            </Button>
-          </>
-        )}
-      </LobbyFrame>
-    );
-  }
-
-  if (screen.name === "delivery") {
-    const host = findHost(snapshot.hosts, delivery.hostId);
-    const carrierName =
-      delivery.carrier === "その他"
-        ? delivery.customCarrier.trim()
-        : delivery.carrier;
-    return (
-      <LobbyFrame
-        now={snapshot.now}
-        onBack={back}
-        title={
-          screen.step === 0
-            ? "配送の受付"
-            : screen.step === 1
-              ? "お荷物の内容"
-              : "配達の確認"
-        }
-        lede={
-          screen.step === 0
-            ? "配送会社を選んでください。"
-            : screen.step === 2
-              ? "宛先の担当者の携帯へ配達を連絡します。お荷物は受付カウンターへお渡しください。"
-              : undefined
-        }
-        steps={DELIVERY_STEPS}
-        stepIndex={screen.step}
-      >
-        {screen.step === 0 ? (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {CARRIERS.map((carrier) => (
-              <button
-                key={carrier}
-                type="button"
-                onClick={() => {
-                  setDelivery((draft) => ({ ...draft, carrier }));
-                  setScreen({ name: "delivery", step: 1 });
-                }}
-                className={cn(
-                  "rounded-2xl border bg-card px-4 py-5 text-left text-lg transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                  delivery.carrier === carrier
-                    ? "border-primary bg-accent"
-                    : "border-border",
-                )}
-              >
-                {carrier}
-              </button>
-            ))}
+        {!contact ? (
+          <div className="rounded-2xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+            担当者の携帯が登録されていません。受付カウンターへお声がけください。
           </div>
-        ) : null}
-
-        {screen.step === 1 ? (
-          <form
-            className="flex flex-col gap-5"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!carrierName) {
-                setError("配送会社を入力してください。");
-                return;
-              }
-              if (!delivery.hostId) {
-                setError("宛先の担当者を選択してください。");
-                return;
-              }
-              setError("");
-              setScreen({ name: "delivery", step: 2 });
-            }}
-          >
-            {delivery.carrier === "その他" ? (
-              <Field label="配送会社名" htmlFor="carrier-name" required>
-                <Input
-                  id="carrier-name"
-                  autoFocus
-                  value={delivery.customCarrier}
-                  onChange={(event) =>
-                    setDelivery((draft) => ({
-                      ...draft,
-                      customCarrier: event.target.value,
-                    }))
-                  }
-                  className="h-14 rounded-2xl text-base md:text-base"
-                  maxLength={40}
-                />
-              </Field>
-            ) : null}
-            <Field label="ドライバー名" htmlFor="driver-name" hint="任意">
-              <Input
-                id="driver-name"
-                value={delivery.driverName}
-                onChange={(event) =>
-                  setDelivery((draft) => ({
-                    ...draft,
-                    driverName: event.target.value,
-                  }))
-                }
-                placeholder="未記入の場合は「配達担当」になります"
-                className="h-14 rounded-2xl text-base md:text-base"
-                maxLength={40}
-              />
-            </Field>
-            <Field label="個数">
-              <CountStepper
-                value={delivery.parcelCount}
-                min={1}
-                max={30}
-                unit="個"
-                onChange={(parcelCount) =>
-                  setDelivery((draft) => ({ ...draft, parcelCount }))
-                }
-              />
-            </Field>
-            <Field label="宛先">
-              <HostPicker
-                hosts={snapshot.hosts}
-                value={delivery.hostId}
-                onChange={(hostId) =>
-                  setDelivery((draft) => ({ ...draft, hostId }))
-                }
-              />
-            </Field>
-            <Field label="置き場所など" htmlFor="delivery-note" hint="任意">
-              <Textarea
-                id="delivery-note"
-                value={delivery.purposeNote}
-                onChange={(event) =>
-                  setDelivery((draft) => ({
-                    ...draft,
-                    purposeNote: event.target.value,
-                  }))
-                }
-                placeholder="総務部宛、冷蔵"
-                maxLength={120}
-                className="min-h-20 rounded-2xl text-base md:text-base"
-              />
-            </Field>
-            {error ? (
-              <p className="text-sm text-destructive" role="alert">
-                {error}
-              </p>
-            ) : null}
-            <Button type="submit" className="h-14 rounded-2xl text-base">
-              確認へ進む
-            </Button>
-          </form>
-        ) : null}
-
-        {screen.step === 2 ? (
-          <>
-            <Summary
-              rows={[
-                ["配送会社", carrierName || "—"],
-                ["お名前", delivery.driverName.trim() || "配達担当"],
-                ["個数", `${delivery.parcelCount}個`],
-                ["メモ", delivery.purposeNote.trim() || "—"],
-                [
-                  "宛先",
-                  host
-                    ? `${host.name}（${host.department}・${host.floor}）の携帯`
-                    : "—",
-                ],
-              ]}
-            />
-            <Button
-              type="button"
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+            <Choice
+              icon={<Truck />}
+              title="配送"
+              body="選んだ時点で、担当者の携帯へ配送の到着を連絡します。"
               disabled={pending}
-              className="mt-6 h-14 w-full rounded-2xl text-base"
-              onClick={() => {
-                startTransition(async () => {
-                  const result = await deliveryAction(delivery);
-                  if (!result.ok) {
-                    toast.error(result.message);
-                    return;
-                  }
-                  replace(result.snapshot);
-                  complete(result.visit);
-                });
-              }}
-            >
-              配達を記録する
-            </Button>
-          </>
-        ) : null}
+              onClick={() => arrive("delivery")}
+            />
+            <Choice
+              icon={<HardHat />}
+              title="工事・作業"
+              body="選んだ時点で、担当者の携帯へ工事・作業の到着を連絡します。"
+              disabled={pending}
+              onClick={() => arrive("work")}
+            />
+          </div>
+        )}
       </LobbyFrame>
     );
   }
@@ -844,7 +465,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
         {deliveryDone
           ? `${who}へ配達の連絡を送りました。お荷物は受付カウンターへお渡しください。`
           : workDone
-            ? `${who}へ工事の到着を連絡しました。受付で入館のご案内をお受けください。`
+            ? `${who}へ工事・作業の到着を連絡しました。受付で入館のご案内をお受けください。`
             : interviewDone
               ? `${who}へ面接の到着を連絡しました。ロビーで少々お待ちください。`
               : `${who}へ来客の到着を連絡しました。ロビーで少々お待ちください。`}
@@ -874,17 +495,20 @@ function Choice({
   title,
   body,
   onClick,
+  disabled = false,
 }: {
   icon: ReactNode;
   title: string;
   body: string;
   onClick: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group flex h-full flex-col items-start rounded-3xl border border-border bg-card px-5 py-5 text-left transition-colors hover:border-primary/50 hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 sm:min-h-52 sm:py-6"
+      disabled={disabled}
+      className="group flex h-full flex-col items-start rounded-3xl border border-border bg-card px-5 py-5 text-left transition-colors hover:border-primary/50 hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60 sm:min-h-52 sm:py-6"
     >
       <span className="flex size-11 items-center justify-center rounded-2xl bg-secondary text-primary [&_svg]:size-5">
         {icon}
@@ -922,49 +546,6 @@ function Field({
         ) : null}
       </div>
       {children}
-    </div>
-  );
-}
-
-function CountStepper({
-  value,
-  min,
-  max,
-  unit,
-  onChange,
-}: {
-  value: number;
-  min: number;
-  max: number;
-  unit: string;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      <Button
-        type="button"
-        variant="outline"
-        className="size-12 rounded-2xl text-lg"
-        disabled={value <= min}
-        onClick={() => onChange(value - 1)}
-        aria-label="減らす"
-      >
-        −
-      </Button>
-      <span className="min-w-16 text-center font-heading text-2xl tabular-nums">
-        {value}
-        <span className="ml-1 text-base text-muted-foreground">{unit}</span>
-      </span>
-      <Button
-        type="button"
-        variant="outline"
-        className="size-12 rounded-2xl text-lg"
-        disabled={value >= max}
-        onClick={() => onChange(value + 1)}
-        aria-label="増やす"
-      >
-        ＋
-      </Button>
     </div>
   );
 }

@@ -5,7 +5,7 @@ export const PURPOSE_LABEL: Record<Purpose, string> = {
   interview: "面接",
   sales: "ご提案・挨拶",
   delivery: "お荷物・配達",
-  work: "工事",
+  work: "工事・作業",
   other: "その他",
 };
 

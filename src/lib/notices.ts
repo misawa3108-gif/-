@@ -14,13 +14,16 @@ export function noticeBody(visit: Visit, host: Host): string {
     return `【面接】${visit.visitorName}様が受付にお見えです。${ticket}。1階ロビーまでお迎えください。`;
   }
   if (visit.purpose === "delivery") {
-    const who = visit.visitorCompany
-      ? `${visit.visitorCompany}の${visit.visitorName}様`
-      : `${visit.visitorName}様`;
+    if (!visit.visitorCompany) {
+      return `【配送】配送の方が受付にお見えです。${ticket}。1階受付までお越しください。`;
+    }
     const count = visit.partySize > 0 ? `（${visit.partySize}個）` : "";
-    return `【配送】${who}${count}がお見えです。${ticket}。1階受付までお越しください。`;
+    return `【配送】${visit.visitorCompany}の${visit.visitorName}様${count}がお見えです。${ticket}。1階受付までお越しください。`;
   }
   if (visit.purpose === "work") {
+    if (!visit.visitorCompany) {
+      return `【工事】工事・作業の方が受付にお見えです。${ticket}。1階受付までお越しください。`;
+    }
     const detail = visit.purposeNote ? `${visit.purposeNote}。` : "";
     return `【工事】${visit.visitorCompany}の${visit.visitorName}様がお見えです。${detail}${ticket}。1階受付までお越しください。`;
   }
