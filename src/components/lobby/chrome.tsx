@@ -6,7 +6,7 @@ export function LobbyHeader({ now }: { now: string }) {
   return (
     <header className="flex items-start justify-between gap-4">
       <div className="flex items-center gap-3">
-        <Mark className="size-10 sm:size-11" />
+        <Mark className="size-12 sm:size-14" />
         <p className="font-heading text-base leading-tight sm:text-lg">
           {company.name}
         </p>
@@ -26,4 +26,4 @@ export function LobbyFooter() {
 }
 
 export const lobbyWash =
-  "pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,oklch(0.94_0.03_92)_0%,transparent_58%),radial-gradient(ellipse_at_bottom,oklch(0.98_0.015_95)_0%,transparent_50%)]";
+  "pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,oklch(0.93_0.07_90)_0%,transparent_58%),radial-gradient(ellipse_at_bottom,oklch(0.98_0.025_95)_0%,transparent_50%)]";

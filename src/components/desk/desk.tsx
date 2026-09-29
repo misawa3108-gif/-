@@ -114,7 +114,7 @@ export function Desk({ initial }: { initial: Snapshot }) {
       <header className="border-b bg-card/80">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <Mark className="size-9" />
+            <Mark className="size-11" />
             <div>
               <p className="font-heading text-lg leading-tight">受付デスク</p>
               <p className="text-xs text-muted-foreground">

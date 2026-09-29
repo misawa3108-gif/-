@@ -98,7 +98,7 @@ export function Handset({ initial }: { initial: Snapshot }) {
       <header className="border-b bg-card/80">
         <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-4 px-4 py-4">
           <div className="flex items-center gap-3">
-            <Mark className="size-9" />
+            <Mark className="size-11" />
             <div>
               <p className="font-heading text-lg leading-tight">担当者への連絡</p>
               <p className="text-xs text-muted-foreground">

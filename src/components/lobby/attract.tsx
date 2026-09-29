@@ -1,6 +1,7 @@
 "use client";
 
 import { LobbyFooter, LobbyHeader, lobbyWash } from "@/components/lobby/chrome";
+import { Mark } from "@/components/reception/mark";
 import { company } from "@/lib/company";
 
 export function AttractScreen({
@@ -22,7 +23,8 @@ export function AttractScreen({
         <LobbyHeader now={now} />
 
         <div className="flex flex-1 flex-col items-center justify-center px-2 py-10 text-center">
-          <p className="text-xs tracking-[0.32em] text-primary sm:text-sm">
+          <Mark className="size-28 sm:size-36" />
+          <p className="mt-6 text-xs tracking-[0.32em] text-primary sm:text-sm">
             {company.nameEn.toUpperCase()}
           </p>
           <h1 className="mt-5 font-heading text-5xl leading-none tracking-tight sm:text-7xl">
@@ -40,7 +42,7 @@ export function AttractScreen({
             />
             <span
               aria-hidden="true"
-              className="absolute inset-3 rounded-full border border-primary/25 bg-card/80 shadow-[0_16px_40px_-24px_oklch(0.35_0.04_168)] transition-transform duration-300 group-hover:scale-105 group-active:scale-95"
+              className="absolute inset-3 rounded-full border border-primary/35 bg-card/80 shadow-[0_16px_40px_-24px_oklch(0.55_0.1_80)] transition-transform duration-300 group-hover:scale-105 group-active:scale-95"
             />
             <span className="relative font-heading text-sm tracking-wide text-primary">
               タッチ
