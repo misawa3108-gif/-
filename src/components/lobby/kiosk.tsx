@@ -191,7 +191,6 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
 
   if (screen.name === "guest" || screen.name === "guest-confirm") {
     const host = findHost(snapshot.hosts, guest.hostId);
-    const via = contactNoun(host);
     const confirming = screen.name === "guest-confirm";
     return (
       <LobbyFrame
@@ -200,7 +199,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
         title={confirming ? "この内容で連絡します" : "来客の受付"}
         lede={
           confirming
-            ? `アポの相手の${via}へ、到着の連絡を送ります。`
+            ? "アポの相手へ、到着の連絡を送ります。"
             : "会社名、訪問者の名前、誰に対してのアポかを記入してください。"
         }
       >
@@ -214,7 +213,6 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
                   "アポの相手",
                   host ? `${host.name}（${host.department}・${host.floor}）` : "—",
                 ],
-                ["連絡先", host ? `${host.name}の${via}` : "—"],
               ]}
             />
             <Button
@@ -237,7 +235,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
                 });
               }}
             >
-              {pending ? "連絡しています…" : `${via}へ連絡する`}
+              {pending ? "連絡しています…" : "連絡する"}
             </Button>
           </>
         ) : (

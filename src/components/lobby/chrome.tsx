@@ -1,6 +1,7 @@
 import { Clock } from "@/components/reception/clock";
 import { Mark } from "@/components/reception/mark";
 import { company } from "@/lib/company";
+import { cn } from "@/lib/utils";
 
 export function LobbyHeader({ now }: { now: string }) {
   return (
@@ -16,9 +17,14 @@ export function LobbyHeader({ now }: { now: string }) {
   );
 }
 
-export function LobbyFooter() {
+export function LobbyFooter({ className }: { className?: string }) {
   return (
-    <footer className="pb-2 text-center text-xs leading-relaxed text-muted-foreground">
+    <footer
+      className={cn(
+        "pb-2 text-center text-xs leading-relaxed text-muted-foreground",
+        className,
+      )}
+    >
       <p>{company.address}</p>
       <p className="mt-1">受付 {company.hours}</p>
     </footer>
