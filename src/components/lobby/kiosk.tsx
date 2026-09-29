@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition, type ReactNode } from "react";
-import Link from "next/link";
 import { Briefcase, HardHat, Truck, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -19,7 +18,7 @@ import {
   interviewAction,
   workAction,
 } from "@/lib/actions";
-import { INTERVIEW_HOST_ID, company } from "@/lib/company";
+import { INTERVIEW_HOST_ID } from "@/lib/company";
 import { CARRIERS } from "@/lib/labels";
 import { greeting } from "@/lib/time";
 import type { Snapshot, Visit } from "@/lib/types";
@@ -192,18 +191,18 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
   if (screen.name === "home") {
     return (
       <LobbyFrame now={snapshot.now} wide onBack={goAttract}>
-        <div className="flex flex-1 flex-col">
-          <p className="text-sm tracking-[0.18em] text-primary">
+        <div className="flex flex-1 flex-col items-center justify-center px-2 py-10 text-center">
+          <p className="text-xs tracking-[0.32em] text-primary sm:text-sm">
             {greeting(new Date(snapshot.now))}
           </p>
-          <h1 className="mt-3 max-w-xl font-heading text-4xl leading-[1.15] tracking-tight sm:text-6xl">
+          <h1 className="mt-5 font-heading text-5xl leading-none tracking-tight sm:text-6xl">
             ご用件をお選びください
           </h1>
-          <p className="mt-5 max-w-lg text-sm leading-relaxed text-muted-foreground sm:text-base">
+          <p className="mt-5 max-w-md text-sm leading-relaxed text-muted-foreground sm:text-base">
             あてはまる受付をタッチしてください。記入が終わると、担当者の携帯へ連絡します。
           </p>
 
-          <div className="mt-10 grid gap-3 sm:grid-cols-3 sm:gap-4">
+          <div className="mt-12 grid w-full gap-3 text-left sm:grid-cols-3 sm:gap-4">
             <Choice
               icon={<UserRound />}
               title="来客用"
@@ -236,28 +235,6 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
               }}
             />
           </div>
-
-          <footer className="mt-auto flex flex-col gap-3 pt-12 text-xs text-muted-foreground sm:flex-row sm:items-end sm:justify-between">
-            <p>
-              {company.address}
-              <span className="px-1.5">·</span>
-              受付 {company.hours}
-            </p>
-            <span className="flex gap-4">
-              <Link
-                href="/phone"
-                className="w-fit text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-              >
-                担当者の携帯
-              </Link>
-              <Link
-                href="/desk"
-                className="w-fit text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-              >
-                受付スタッフ
-              </Link>
-            </span>
-          </footer>
         </div>
       </LobbyFrame>
     );

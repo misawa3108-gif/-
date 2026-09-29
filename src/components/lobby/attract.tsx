@@ -1,7 +1,6 @@
 "use client";
 
-import { Clock } from "@/components/reception/clock";
-import { Mark } from "@/components/reception/mark";
+import { LobbyFooter, LobbyHeader, lobbyWash } from "@/components/lobby/chrome";
 import { company } from "@/lib/company";
 
 export function AttractScreen({
@@ -18,20 +17,9 @@ export function AttractScreen({
       className="group relative flex min-h-dvh w-full cursor-pointer flex-col text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/40 focus-visible:ring-inset"
     >
       <span className="sr-only">画面にタッチして受付を始める</span>
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,oklch(0.94_0.03_92)_0%,transparent_58%),radial-gradient(ellipse_at_bottom,oklch(0.98_0.015_95)_0%,transparent_50%)]"
-      />
+      <div aria-hidden="true" className={lobbyWash} />
       <div className="relative flex min-h-dvh w-full flex-col px-6 py-6 sm:px-10 sm:py-8">
-        <header className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Mark className="size-10 sm:size-11" />
-            <p className="font-heading text-base leading-tight sm:text-lg">
-              {company.name}
-            </p>
-          </div>
-          <Clock initialIso={now} withDate />
-        </header>
+        <LobbyHeader now={now} />
 
         <div className="flex flex-1 flex-col items-center justify-center px-2 py-10 text-center">
           <p className="text-xs tracking-[0.32em] text-primary sm:text-sm">
@@ -63,10 +51,7 @@ export function AttractScreen({
           </p>
         </div>
 
-        <footer className="pb-2 text-center text-xs leading-relaxed text-muted-foreground">
-          <p>{company.address}</p>
-          <p className="mt-1">受付 {company.hours}</p>
-        </footer>
+        <LobbyFooter />
       </div>
     </button>
   );
