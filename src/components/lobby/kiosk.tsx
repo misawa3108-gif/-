@@ -2,13 +2,7 @@
 
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
-import {
-  CalendarCheck,
-  ChevronRight,
-  Package,
-  Search,
-  UserRound,
-} from "lucide-react";
+import { Briefcase, ChevronRight, Package, Search, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +18,7 @@ import {
   walkInAction,
 } from "@/lib/actions";
 import { company } from "@/lib/company";
-import { CARRIERS, PURPOSE_LABEL, WALK_IN_PURPOSES } from "@/lib/labels";
+import { CARRIERS, PURPOSE_LABEL, VISITOR_PURPOSES } from "@/lib/labels";
 import { formatTokyoTime, greeting } from "@/lib/time";
 import type { Purpose, Snapshot, Visit } from "@/lib/types";
 import {
@@ -32,14 +26,15 @@ import {
   matchAppointments,
   normalizeQuery,
   partyPhrase,
+  type AppointmentLane,
 } from "@/lib/visits";
 import { cn } from "@/lib/utils";
 
 type Screen =
   | { name: "home" }
-  | { name: "appointment" }
-  | { name: "appointment-confirm"; visitId: string }
-  | { name: "walkin"; step: 0 | 1 | 2 | 3 }
+  | { name: "appointment"; lane: AppointmentLane }
+  | { name: "appointment-confirm"; visitId: string; lane: AppointmentLane }
+  | { name: "walkin"; lane: AppointmentLane; step: 0 | 1 | 2 | 3 }
   | { name: "delivery"; step: 0 | 1 | 2 }
   | { name: "done"; visit: Visit };
 
@@ -62,6 +57,7 @@ type DeliveryDraft = {
 };
 
 const WALK_STEPS = ["ご用件", "担当者", "お客様情報", "確認"];
+const INTERVIEW_STEPS = ["面接官", "お名前", "確認"];
 const DELIVERY_STEPS = ["配送会社", "お荷物", "確認"];
 
 const emptyWalkIn = (): WalkInDraft => ({
@@ -115,6 +111,25 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
     setScreen({ name: "home" });
   }
 
+  function openLane(lane: AppointmentLane) {
+    setError("");
+    setQuery("");
+    setScreen({ name: "appointment", lane });
+  }
+
+  function startWalkIn(lane: AppointmentLane) {
+    setError("");
+    setWalkIn({
+      ...emptyWalkIn(),
+      purpose: lane === "interview" ? "interview" : "meeting",
+    });
+    setScreen({
+      name: "walkin",
+      lane,
+      step: lane === "interview" ? 1 : 0,
+    });
+  }
+
   function complete(visit: Visit) {
     setSecondsLeft(24);
     setReturnAt(Date.now() + 24_000);
@@ -128,12 +143,20 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
       return;
     }
     if (screen.name === "appointment-confirm") {
-      setScreen({ name: "appointment" });
+      setScreen({ name: "appointment", lane: screen.lane });
       return;
     }
     if (screen.name === "walkin") {
-      if (screen.step === 0) goHome();
-      else setScreen({ name: "walkin", step: (screen.step - 1) as 0 | 1 | 2 });
+      const first = screen.lane === "interview" ? 1 : 0;
+      if (screen.step <= first) {
+        setScreen({ name: "appointment", lane: screen.lane });
+        return;
+      }
+      setScreen({
+        name: "walkin",
+        lane: screen.lane,
+        step: (screen.step - 1) as 0 | 1 | 2,
+      });
       return;
     }
     if (screen.name === "delivery") {
@@ -142,7 +165,10 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
     }
   }
 
-  const matches = matchAppointments(snapshot.visits, query);
+  const matches =
+    screen.name === "appointment"
+      ? matchAppointments(snapshot.visits, query, screen.lane)
+      : [];
   const typed = normalizeQuery(query).length > 0;
 
   if (screen.name === "home") {
@@ -157,33 +183,26 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
             <span className="mt-1 block">ご来訪ありがとうございます</span>
           </h1>
           <p className="mt-5 max-w-lg text-sm leading-relaxed text-muted-foreground sm:text-base">
-            受付番号をお渡しし、担当者へ来客をお知らせします。あてはまる項目を選んでください。
+            受付番号をお渡しし、担当者へお知らせします。あてはまる受付を選んでください。
           </p>
 
           <div className="mt-10 grid gap-3 sm:grid-cols-3 sm:gap-4">
             <Choice
-              icon={<CalendarCheck />}
-              title="ご予約のある方"
-              body="お名前で本日の予約を呼び出します。"
-              onClick={() => {
-                setQuery("");
-                setScreen({ name: "appointment" });
-              }}
+              icon={<UserRound />}
+              title="来客用"
+              body="打ち合わせ、ご挨拶、その他のご訪問です。"
+              onClick={() => openLane("visitor")}
             />
             <Choice
-              icon={<UserRound />}
-              title="アポイントのない方"
-              body="ご用件と担当者を選んで受付します。"
-              onClick={() => {
-                setWalkIn(emptyWalkIn());
-                setError("");
-                setScreen({ name: "walkin", step: 0 });
-              }}
+              icon={<Briefcase />}
+              title="面接用"
+              body="採用面接のご予約呼び出しと受付です。"
+              onClick={() => openLane("interview")}
             />
             <Choice
               icon={<Package />}
-              title="お荷物・配達"
-              body="配送会社と宛先を記録します。"
+              title="配送関係用"
+              body="宅配や荷物の宛先を記録します。"
               onClick={() => {
                 setDelivery(emptyDelivery());
                 setError("");
@@ -211,12 +230,17 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
   }
 
   if (screen.name === "appointment") {
+    const interview = screen.lane === "interview";
     return (
       <LobbyFrame
         now={snapshot.now}
         onBack={back}
-        title="ご予約の確認"
-        lede="お名前か会社名の一部を入力してください。一覧には出さないようにしています。"
+        title={interview ? "面接のご予約" : "来客のご予約"}
+        lede={
+          interview
+            ? "予約時のお名前を入力してください。一覧には出さないようにしています。"
+            : "予約時のお名前か会社名を入力してください。一覧には出さないようにしています。"
+        }
       >
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted-foreground" />
@@ -224,31 +248,40 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
             autoFocus
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="山田、または会社名"
-            aria-label="予約を探す"
+            placeholder={interview ? "木村" : "山田、または会社名"}
+            aria-label={interview ? "面接予約を探す" : "来客予約を探す"}
             className="h-14 rounded-2xl pl-12 text-base md:text-base"
           />
+        </div>
+        <div className="mt-4">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 rounded-full px-5"
+            onClick={() => startWalkIn(screen.lane)}
+          >
+            {interview ? "予約がない方はこちら" : "予約がない来客の方はこちら"}
+          </Button>
         </div>
         <div className="mt-5">
           {!typed ? (
             <p className="rounded-2xl border border-dashed px-4 py-12 text-center text-sm text-muted-foreground">
-              予約時のお名前を入力すると、本日の予定が表示されます。
+              {interview
+                ? "面接予約のお名前を入力すると、本日の予定が表示されます。"
+                : "来客予約のお名前を入力すると、本日の予定が表示されます。"}
             </p>
           ) : matches.length === 0 ? (
             <div className="rounded-2xl border border-dashed px-4 py-10 text-center">
               <p className="text-sm text-muted-foreground">
-                「{query.trim()}」のご予約は見当たりません。
+                「{query.trim()}」の{interview ? "面接" : "来客"}予約は見当たりません。
               </p>
               <Button
                 type="button"
                 variant="outline"
                 className="mt-4 h-11 rounded-full px-5"
-                onClick={() => {
-                  setWalkIn(emptyWalkIn());
-                  setScreen({ name: "walkin", step: 0 });
-                }}
+                onClick={() => startWalkIn(screen.lane)}
               >
-                アポイントなしで受付する
+                {interview ? "予約なしで面接受付する" : "予約なしで来客受付する"}
               </Button>
             </div>
           ) : (
@@ -263,6 +296,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
                         setScreen({
                           name: "appointment-confirm",
                           visitId: visit.id,
+                          lane: screen.lane,
                         })
                       }
                       className="flex w-full items-center justify-between gap-3 rounded-2xl border bg-card px-4 py-4 text-left transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -301,7 +335,11 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
         now={snapshot.now}
         onBack={back}
         title="こちらのご予約ですか"
-        lede="内容を確認して受付してください。担当者へ来客をお知らせします。"
+        lede={
+          screen.lane === "interview"
+            ? "内容を確認して受付してください。面接官へ到着をお知らせします。"
+            : "内容を確認して受付してください。担当者へ来客をお知らせします。"
+        }
       >
         {!visit || visit.status !== "expected" ? (
           <div className="rounded-2xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
@@ -311,7 +349,9 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
                 type="button"
                 variant="outline"
                 className="mt-4 h-11 rounded-full px-5"
-                onClick={() => setScreen({ name: "appointment" })}
+                onClick={() =>
+                  setScreen({ name: "appointment", lane: screen.lane })
+                }
               >
                 検索に戻る
               </Button>
@@ -364,6 +404,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
 
   if (screen.name === "walkin") {
     const host = findHost(snapshot.hosts, walkIn.hostId);
+    const interview = screen.lane === "interview";
     return (
       <LobbyFrame
         now={snapshot.now}
@@ -372,29 +413,37 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
           screen.step === 0
             ? "ご用件を教えてください"
             : screen.step === 1
-              ? "どちらにご用ですか"
+              ? interview
+                ? "面接官を選んでください"
+                : "どちらにご用ですか"
               : screen.step === 2
-                ? "お客様のお名前"
-                : "受付内容の確認"
+                ? interview
+                  ? "お名前を教えてください"
+                  : "お客様のお名前"
+                : interview
+                  ? "面接の受付内容"
+                  : "受付内容の確認"
         }
         lede={
           screen.step === 3
-            ? "この内容で担当者へお知らせします。"
+            ? interview
+              ? "この内容で面接官へ到着をお知らせします。"
+              : "この内容で担当者へお知らせします。"
             : undefined
         }
-        steps={WALK_STEPS}
-        stepIndex={screen.step}
+        steps={interview ? INTERVIEW_STEPS : WALK_STEPS}
+        stepIndex={interview ? screen.step - 1 : screen.step}
       >
         {screen.step === 0 ? (
           <div className="grid gap-2 sm:grid-cols-2">
-            {WALK_IN_PURPOSES.map((purpose) => (
+            {VISITOR_PURPOSES.map((purpose) => (
               <button
                 key={purpose}
                 type="button"
                 aria-pressed={walkIn.purpose === purpose}
                 onClick={() => {
                   setWalkIn((draft) => ({ ...draft, purpose }));
-                  setScreen({ name: "walkin", step: 1 });
+                  setScreen({ name: "walkin", lane: screen.lane, step: 1 });
                 }}
                 className={cn(
                   "rounded-2xl border bg-card px-4 py-5 text-left text-lg transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
@@ -418,7 +467,9 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
             />
             <NextButton
               disabled={!walkIn.hostId}
-              onClick={() => setScreen({ name: "walkin", step: 2 })}
+              onClick={() =>
+                setScreen({ name: "walkin", lane: screen.lane, step: 2 })
+              }
             />
           </>
         ) : null}
@@ -434,7 +485,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
                 return;
               }
               setError("");
-              setScreen({ name: "walkin", step: 3 });
+              setScreen({ name: "walkin", lane: screen.lane, step: 3 });
             }}
           >
             <Field label="お名前" htmlFor="visitor-name" required>
@@ -448,12 +499,16 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
                     visitorName: event.target.value,
                   }))
                 }
-                placeholder="山田 太郎"
+                placeholder={interview ? "木村 咲" : "山田 太郎"}
                 className="h-14 rounded-2xl text-base md:text-base"
                 maxLength={40}
               />
             </Field>
-            <Field label="会社名" htmlFor="visitor-company" hint="個人の方は空欄で構いません">
+            <Field
+              label={interview ? "所属" : "会社名"}
+              htmlFor="visitor-company"
+              hint="個人の方は空欄で構いません"
+            >
               <Input
                 id="visitor-company"
                 value={walkIn.visitorCompany}
@@ -463,7 +518,7 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
                     visitorCompany: event.target.value,
                   }))
                 }
-                placeholder="株式会社ノースブリッジ"
+                placeholder={interview ? "空欄でも構いません" : "株式会社ノースブリッジ"}
                 className="h-14 rounded-2xl text-base md:text-base"
                 maxLength={60}
               />
@@ -489,7 +544,9 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
                     purposeNote: event.target.value,
                   }))
                 }
-                placeholder="四半期の進捗確認"
+                placeholder={
+                  interview ? "プロダクトデザイナー一次面接" : "四半期の進捗確認"
+                }
                 maxLength={120}
                 className="min-h-24 rounded-2xl text-base md:text-base"
               />
@@ -510,7 +567,10 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
             <Summary
               rows={[
                 ["お名前", walkIn.visitorName.trim()],
-                ["会社", walkIn.visitorCompany.trim() || "個人"],
+                [
+                  interview ? "所属" : "会社",
+                  walkIn.visitorCompany.trim() || "個人",
+                ],
                 ["人数", `${walkIn.partySize}名`],
                 ["ご用件", PURPOSE_LABEL[walkIn.purpose]],
                 ["内容", walkIn.purposeNote.trim() || "—"],
@@ -565,15 +625,17 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
         onBack={back}
         title={
           screen.step === 0
-            ? "配送会社を選んでください"
+            ? "配送関係の受付"
             : screen.step === 1
               ? "お荷物の内容"
               : "配達の確認"
         }
         lede={
-          screen.step === 2
-            ? "宛先の担当者へ配達をお知らせします。お荷物は受付カウンターへお渡しください。"
-            : undefined
+          screen.step === 0
+            ? "配送会社を選んでください。"
+            : screen.step === 2
+              ? "宛先の担当者へ配達をお知らせします。お荷物は受付カウンターへお渡しください。"
+              : undefined
         }
         steps={DELIVERY_STEPS}
         stepIndex={screen.step}
@@ -738,13 +800,19 @@ export function Kiosk({ initial }: { initial: Snapshot }) {
 
   const host = findHost(snapshot.hosts, screen.visit.hostId);
   const deliveryDone = screen.visit.purpose === "delivery";
+  const interviewDone = screen.visit.purpose === "interview";
+  const who = host
+    ? `${host.name}（${host.department}・${host.floor}）`
+    : "担当者";
   return (
     <LobbyFrame now={snapshot.now} onBack={goHome} title="受付が完了しました">
       <PassCard visit={screen.visit} host={host} />
       <p className="mt-6 text-sm leading-relaxed text-muted-foreground sm:text-base">
         {deliveryDone
           ? `${host ? `${host.name}（内線 ${host.extension}）` : "担当者"}へ配達をお知らせしました。お荷物は受付カウンターへお渡しください。`
-          : `${host ? `${host.name}（${host.department}・${host.floor}）` : "担当者"}へ来客をお知らせしました。ロビーで少々お待ちください。`}
+          : interviewDone
+            ? `${who}へ面接の到着をお知らせしました。ロビーで少々お待ちください。`
+            : `${who}へ来客をお知らせしました。ロビーで少々お待ちください。`}
       </p>
       <Button
         type="button"

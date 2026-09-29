@@ -15,6 +15,8 @@ export const WALK_IN_PURPOSES: Purpose[] = [
   "other",
 ];
 
+export const VISITOR_PURPOSES: Purpose[] = ["meeting", "sales", "other"];
+
 export const CARRIERS = [
   "ヤマト運輸",
   "佐川急便",

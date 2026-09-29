@@ -27,10 +27,18 @@ export function sortVisits(visits: Visit[]): Visit[] {
   });
 }
 
-export function matchAppointments(visits: Visit[], query: string): Visit[] {
-  const expected = visits.filter(
-    (visit) => visit.status === "expected" && visit.hasAppointment,
-  );
+export type AppointmentLane = "visitor" | "interview";
+
+export function matchAppointments(
+  visits: Visit[],
+  query: string,
+  lane: AppointmentLane,
+): Visit[] {
+  const expected = visits.filter((visit) => {
+    if (visit.status !== "expected" || !visit.hasAppointment) return false;
+    if (lane === "interview") return visit.purpose === "interview";
+    return visit.purpose !== "interview" && visit.purpose !== "delivery";
+  });
   const q = normalizeQuery(query);
   if (!q) return sortVisits(expected);
   return expected.filter((visit) => {

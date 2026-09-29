@@ -21,7 +21,7 @@ let memory: Database | null = null;
 let chain: Promise<unknown> = Promise.resolve();
 
 function dataFile(): string {
-  if (process.env.VERCEL) return path.join("/tmp", "aoba-reception.json");
+  if (process.env.VERCEL) return path.join("/tmp", "lightpass-reception.json");
   return path.join(process.cwd(), "data", "reception.json");
 }
 
